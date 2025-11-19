@@ -68,6 +68,9 @@ func New(bindAddr string, readonly bool, goofyMode bool, lst *licensestatuses.Li
 
 	s.handlePrivateFunc(sr.R, licenseRoutesPathPrefix, apilsd.FilterLicenseStatuses, basicAuth).Methods("GET")
 
+	// batch get license statuses - must be before /{key} to avoid route conflict
+	s.handleFunc(licenseRoutes, "/batch/status", apilsd.GetLicenseStatusesBatch).Methods("POST")
+
 	s.handleFunc(licenseRoutes, "/{key}/status", apilsd.GetLicenseStatusDocument).Methods("GET")
 	s.handleFunc(licenseRoutes, "/{key}", apilsd.GetFreshLicense).Methods("GET")
 

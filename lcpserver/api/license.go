@@ -906,6 +906,98 @@ func DecodeJSONLicense(r *http.Request, lic *license.License) error {
 	return err
 }
 
+// BatchLicenseRequest represents the input for batch license fetching
+type BatchLicenseRequest struct {
+	LicenseIDs []string         `json:"license_ids"`
+	Encryption license.License  `json:"encryption,omitempty"`
+}
+
+// BatchLicenseResult represents a single license result in the batch response
+type BatchLicenseResult struct {
+	ID      string           `json:"id"`
+	License *license.License `json:"license,omitempty"`
+	Error   string           `json:"error,omitempty"`
+}
+
+// BatchLicenseResponse represents the response for batch license fetching
+type BatchLicenseResponse struct {
+	Licenses []BatchLicenseResult `json:"licenses"`
+}
+
+// GetLicensesBatch retrieves multiple licenses in a single request
+// This is a performance optimization to avoid N+1 queries when loading multiple licenses
+func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
+	// Parse the request body
+	var req BatchLicenseRequest
+	dec := json.NewDecoder(r.Body)
+	err := dec.Decode(&req)
+	if err != nil {
+		problem.Error(w, r, problem.Problem{Detail: "Invalid request body: " + err.Error()}, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.LicenseIDs) == 0 {
+		problem.Error(w, r, problem.Problem{Detail: "license_ids array is required"}, http.StatusBadRequest)
+		return
+	}
+
+	// Add a log
+	logging.Print(fmt.Sprintf("Batch get %d licenses", len(req.LicenseIDs)))
+
+	// Fetch all licenses in a single query
+	licensesMap, err := s.Licenses().GetByIDs(req.LicenseIDs)
+	if err != nil {
+		problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
+		return
+	}
+
+	// Check if encryption info was provided (for building full licenses)
+	hasEncryption := req.Encryption.Encryption.UserKey.Hint != "" ||
+		req.Encryption.Encryption.UserKey.HexValue != "" ||
+		req.Encryption.Encryption.UserKey.Value != nil
+
+	// Build the response
+	response := BatchLicenseResponse{
+		Licenses: make([]BatchLicenseResult, 0, len(req.LicenseIDs)),
+	}
+
+	for _, id := range req.LicenseIDs {
+		result := BatchLicenseResult{ID: id}
+
+		lic, found := licensesMap[id]
+		if !found {
+			result.Error = "License not found"
+			response.Licenses = append(response.Licenses, result)
+			continue
+		}
+
+		// If encryption info was provided, build the full license
+		if hasEncryption {
+			// Copy encryption info to the license
+			copyInputToLicense(&req.Encryption, &lic)
+
+			// Build the license (encrypt, sign, etc.)
+			err = buildLicense(&lic, s, true)
+			if err != nil {
+				result.Error = err.Error()
+				response.Licenses = append(response.Licenses, result)
+				continue
+			}
+		}
+
+		result.License = &lic
+		response.Licenses = append(response.Licenses, result)
+	}
+
+	// Set headers and send response
+	w.Header().Set("Content-Type", api.ContentType_JSON)
+	w.WriteHeader(http.StatusOK)
+
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.Encode(response)
+}
+
 // notifyLsdServer informs the License Status Server of the creation of a new license
 // and saves the result of the http request in the DB (using *Store)
 func notifyLsdServer(l license.License, s Server) {

@@ -151,6 +151,8 @@ func New(bindAddr string, readonly bool, idx *index.Index, st *storage.Store, ls
 	s.handleFunc(licenseRoutes, "/test/{license_id}", apilcp.GetTestLicense).Methods("GET")
 
 	s.handlePrivateFunc(sr.R, licenseRoutesPathPrefix, apilcp.ListLicenses, basicAuth).Methods("GET")
+	// batch get licenses - must be before /{license_id} to avoid route conflict
+	s.handlePrivateFunc(licenseRoutes, "/batch", apilcp.GetLicensesBatch, basicAuth).Methods("POST")
 	// get a license
 	s.handlePrivateFunc(licenseRoutes, "/{license_id}", apilcp.GetLicense, basicAuth).Methods("GET")
 	s.handlePrivateFunc(licenseRoutes, "/{license_id}", apilcp.GetLicense, basicAuth).Methods("POST")

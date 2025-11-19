@@ -25,6 +25,7 @@ type Store interface {
 	UpdateLsdStatus(id string, status int32) error
 	Add(l License) error
 	Get(id string) (License, error)
+	GetByIDs(ids []string) (map[string]License, error)
 	TouchByContentID(ContentID string) error
 	Count(from time.Time, to time.Time) (int, error)
 }
@@ -160,6 +161,56 @@ func (s *sqlStore) Get(id string) (License, error) {
 		err = ErrNotFound
 	}
 	return l, err
+}
+
+// GetByIDs retrieves multiple licenses by their IDs in a single query
+func (s *sqlStore) GetByIDs(ids []string) (map[string]License, error) {
+	if len(ids) == 0 {
+		return make(map[string]License), nil
+	}
+
+	// Build the query with placeholders
+	query := `SELECT id, user_id, provider, issued, updated, rights_print, rights_copy,
+		rights_start, rights_end, content_fk
+		FROM license WHERE id IN (`
+
+	// Create placeholders and args
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		if i > 0 {
+			query += ", "
+		}
+		query += "?"
+		args[i] = id
+	}
+	query += ")"
+
+	// Convert placeholders for the specific database
+	query = dbutils.GetParamQuery(config.Config.LcpServer.Database, query)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make(map[string]License)
+	for rows.Next() {
+		var l License
+		l.Rights = new(UserRights)
+		err := rows.Scan(&l.ID, &l.User.ID, &l.Provider, &l.Issued, &l.Updated,
+			&l.Rights.Print, &l.Rights.Copy, &l.Rights.Start, &l.Rights.End, &l.ContentID)
+		if err != nil {
+			return nil, err
+		}
+		results[l.ID] = l
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
 
 // TouchByContentID updates the updated field of all licenses for a given contentID
