@@ -941,8 +941,12 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 		return
 	}
 
-	// Add a log
-	logging.Print(fmt.Sprintf("Batch get %d licenses", len(req.LicenseIDs)))
+	// Validate and process encryption input (converts HexValue to Value)
+	err = checkGetLicenseInput(&req.Encryption)
+	if err != nil {
+		problem.Error(w, r, problem.Problem{Detail: "Invalid encryption info: " + err.Error()}, http.StatusBadRequest)
+		return
+	}
 
 	// Fetch all licenses in a single query
 	licensesMap, err := s.Licenses().GetByIDs(req.LicenseIDs)
