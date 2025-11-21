@@ -24,6 +24,7 @@ type LicenseStatuses interface {
 	Add(ls LicenseStatus) error
 	List(deviceLimit int64, limit int64, offset int64) func() (LicenseStatus, error)
 	GetByLicenseID(id string) (*LicenseStatus, error)
+	GetByLicenseIDs(ids []string) (map[string]*LicenseStatus, error)
 	Update(ls LicenseStatus) error
 	Count(from time.Time, to time.Time) (int, error)
 	CountWithStatus(from time.Time, to time.Time, status string) (int, error)
@@ -177,6 +178,83 @@ func (i dbLicenseStatuses) GetByLicenseID(licenseID string) (*LicenseStatus, err
 	}
 
 	return &ls, err
+}
+
+// GetByLicenseIDs retrieves multiple license statuses by their license IDs in a single query
+func (i dbLicenseStatuses) GetByLicenseIDs(licenseIDs []string) (map[string]*LicenseStatus, error) {
+	if len(licenseIDs) == 0 {
+		return make(map[string]*LicenseStatus), nil
+	}
+
+	// Build the query with placeholders
+	query := `SELECT id, status, license_updated, status_updated, device_count, potential_rights_end, license_ref, rights_end
+		FROM license_status WHERE license_ref IN (`
+
+	// Create placeholders and args
+	args := make([]interface{}, len(licenseIDs))
+	for idx, id := range licenseIDs {
+		if idx > 0 {
+			query += ", "
+		}
+		query += "?"
+		args[idx] = id
+	}
+	query += ")"
+
+	// Convert placeholders for the specific database
+	query = dbutils.GetParamQuery(config.Config.LsdServer.Database, query)
+
+	rows, err := i.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make(map[string]*LicenseStatus)
+	for rows.Next() {
+		var statusDB int64
+		ls := LicenseStatus{}
+
+		var potentialRightsEnd *time.Time
+		var licenseUpdate *time.Time
+		var statusUpdate *time.Time
+
+		err := rows.Scan(&ls.ID, &statusDB, &licenseUpdate, &statusUpdate, &ls.DeviceCount, &potentialRightsEnd, &ls.LicenseRef, &ls.CurrentEndLicense)
+		if err != nil {
+			return nil, err
+		}
+
+		status.GetStatus(statusDB, &ls.Status)
+
+		ls.Updated = new(Updated)
+
+		if (potentialRightsEnd != nil) && (!(*potentialRightsEnd).IsZero()) {
+			ls.PotentialRights = new(PotentialRights)
+			ls.PotentialRights.End = potentialRightsEnd
+		}
+
+		ls.Updated.Status = statusUpdate
+		ls.Updated.License = licenseUpdate
+
+		// fix an issue with clients which test that the date of last update of the license
+		// is after the date of creation of the X509 certificate.
+		if config.Config.LcpServer.CertDate != "" {
+			certDate, err := time.Parse("2006-01-02", config.Config.LcpServer.CertDate)
+			if err == nil {
+				if ls.Updated.License == nil || ls.Updated.License.Before(certDate) {
+					ls.Updated.License = &certDate
+				}
+			}
+		}
+
+		results[ls.LicenseRef] = &ls
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
 
 // Update updates a license status

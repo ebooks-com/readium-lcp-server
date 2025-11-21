@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -117,6 +118,114 @@ func GetLicenseStatusDocument(w http.ResponseWriter, r *http.Request, s Server) 
 	enc := json.NewEncoder(w)
 	// write the JSON encoding of the license status to the stream, followed by a newline character
 	err = enc.Encode(licenseStatus)
+	if err != nil {
+		problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
+		return
+	}
+}
+
+// BatchStatusRequest represents the input for batch status fetching
+type BatchStatusRequest struct {
+	LicenseIDs []string `json:"license_ids"`
+}
+
+// BatchStatusResult represents a single status result in the batch response
+type BatchStatusResult struct {
+	ID     string                        `json:"id"`
+	Status *licensestatuses.LicenseStatus `json:"status,omitempty"`
+	Error  string                        `json:"error,omitempty"`
+}
+
+// BatchStatusResponse represents the response for batch status fetching
+type BatchStatusResponse struct {
+	Statuses []BatchStatusResult `json:"statuses"`
+}
+
+// GetLicenseStatusesBatch retrieves multiple license statuses in a single request
+// This is a performance optimization to avoid N+1 queries when loading multiple statuses
+func GetLicenseStatusesBatch(w http.ResponseWriter, r *http.Request, s Server) {
+	// Parse the request body
+	var req BatchStatusRequest
+	dec := json.NewDecoder(r.Body)
+	err := dec.Decode(&req)
+	if err != nil {
+		problem.Error(w, r, problem.Problem{Detail: "Invalid request body: " + err.Error()}, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.LicenseIDs) == 0 {
+		problem.Error(w, r, problem.Problem{Detail: "license_ids array is required"}, http.StatusBadRequest)
+		return
+	}
+
+	// Add a log
+	logging.Print(fmt.Sprintf("Batch get %d license statuses", len(req.LicenseIDs)))
+
+	// Fetch all license statuses in a single query
+	statusesMap, err := s.LicenseStatuses().GetByLicenseIDs(req.LicenseIDs)
+	if err != nil {
+		problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
+		return
+	}
+
+	currentDateTime := time.Now().UTC().Truncate(time.Second)
+
+	// Build the response
+	response := BatchStatusResponse{
+		Statuses: make([]BatchStatusResult, 0, len(req.LicenseIDs)),
+	}
+
+	for _, id := range req.LicenseIDs {
+		result := BatchStatusResult{ID: id}
+
+		licenseStatus, found := statusesMap[id]
+		if !found {
+			result.Error = "License status not found"
+			response.Statuses = append(response.Statuses, result)
+			continue
+		}
+
+		// Check if the license has expired
+		if licenseStatus.CurrentEndLicense != nil {
+			diff := currentDateTime.Sub(*(licenseStatus.CurrentEndLicense))
+
+			// if the rights end date has passed for a ready or active license
+			if (diff > 0) && ((licenseStatus.Status == status.STATUS_ACTIVE) || (licenseStatus.Status == status.STATUS_READY)) {
+				// the license has expired
+				licenseStatus.Status = status.STATUS_EXPIRED
+				// set the updated status time
+				currentTime := time.Now().UTC().Truncate(time.Second)
+				licenseStatus.Updated.Status = &currentTime
+				// update the db
+				err = s.LicenseStatuses().Update(*licenseStatus)
+				if err != nil {
+					result.Error = err.Error()
+					response.Statuses = append(response.Statuses, result)
+					continue
+				}
+			}
+		}
+
+		// Fill the license status with message and links
+		err = fillLicenseStatus(licenseStatus, s)
+		if err != nil {
+			result.Error = err.Error()
+			response.Statuses = append(response.Statuses, result)
+			continue
+		}
+
+		// the device count must not be sent in json to the caller
+		licenseStatus.DeviceCount = nil
+		result.Status = licenseStatus
+		response.Statuses = append(response.Statuses, result)
+	}
+
+	// Set headers and send response
+	w.Header().Set("Content-Type", api.ContentType_JSON)
+	w.WriteHeader(http.StatusOK)
+
+	enc := json.NewEncoder(w)
+	err = enc.Encode(response)
 	if err != nil {
 		problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
 		return
