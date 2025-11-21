@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	auth "github.com/abbot/go-http-auth"
 	_ "github.com/go-sql-driver/mysql"
@@ -55,6 +56,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	// Configure connection pool for better concurrency under load
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(2 * time.Minute)
+
 	if driver == "sqlite3" && !strings.Contains(cnxn, "_journal") {
 		_, err = db.Exec("PRAGMA journal_mode = WAL")
 		if err != nil {
