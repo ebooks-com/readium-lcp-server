@@ -144,6 +144,8 @@ type BatchStatusResponse struct {
 // GetLicenseStatusesBatch retrieves multiple license statuses in a single request
 // This is a performance optimization to avoid N+1 queries when loading multiple statuses
 func GetLicenseStatusesBatch(w http.ResponseWriter, r *http.Request, s Server) {
+	startTotal := time.Now()
+
 	// Parse the request body
 	var req BatchStatusRequest
 	dec := json.NewDecoder(r.Body)
@@ -159,14 +161,17 @@ func GetLicenseStatusesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 	}
 
 	// Add a log
-	logging.Print(fmt.Sprintf("Batch get %d license statuses", len(req.LicenseIDs)))
+	logging.Print(fmt.Sprintf("Batch get %d license statuses started", len(req.LicenseIDs)))
 
 	// Fetch all license statuses in a single query
+	startDb := time.Now()
 	statusesMap, err := s.LicenseStatuses().GetByLicenseIDs(req.LicenseIDs)
 	if err != nil {
+		logging.Print(fmt.Sprintf("Batch status DB query failed after %dms: %s", time.Since(startDb).Milliseconds(), err.Error()))
 		problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
 		return
 	}
+	logging.Print(fmt.Sprintf("Batch status DB query completed in %dms, found %d statuses", time.Since(startDb).Milliseconds(), len(statusesMap)))
 
 	currentDateTime := time.Now().UTC().Truncate(time.Second)
 
@@ -230,6 +235,8 @@ func GetLicenseStatusesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 		problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
 		return
 	}
+
+	logging.Print(fmt.Sprintf("Batch status request completed in %dms total for %d licenses", time.Since(startTotal).Milliseconds(), len(req.LicenseIDs)))
 }
 
 // RegisterDevice registers a device for a given license,

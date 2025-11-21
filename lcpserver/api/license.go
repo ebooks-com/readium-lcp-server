@@ -927,6 +927,8 @@ type BatchLicenseResponse struct {
 // GetLicensesBatch retrieves multiple licenses in a single request
 // This is a performance optimization to avoid N+1 queries when loading multiple licenses
 func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
+	startTotal := time.Now()
+
 	// Parse the request body
 	var req BatchLicenseRequest
 	dec := json.NewDecoder(r.Body)
@@ -941,6 +943,8 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 		return
 	}
 
+	logging.Print(fmt.Sprintf("Batch license request started for %d licenses", len(req.LicenseIDs)))
+
 	// Validate and process encryption input (converts HexValue to Value)
 	err = checkGetLicenseInput(&req.Encryption)
 	if err != nil {
@@ -949,49 +953,97 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 	}
 
 	// Fetch all licenses in a single query
+	startDb := time.Now()
 	licensesMap, err := s.Licenses().GetByIDs(req.LicenseIDs)
 	if err != nil {
+		logging.Print(fmt.Sprintf("Batch license DB query failed after %dms: %s", time.Since(startDb).Milliseconds(), err.Error()))
 		problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
 		return
 	}
+	logging.Print(fmt.Sprintf("Batch license DB query completed in %dms, found %d licenses", time.Since(startDb).Milliseconds(), len(licensesMap)))
 
 	// Check if encryption info was provided (for building full licenses)
 	hasEncryption := req.Encryption.Encryption.UserKey.Hint != "" ||
 		req.Encryption.Encryption.UserKey.HexValue != "" ||
 		req.Encryption.Encryption.UserKey.Value != nil
 
-	// Build the response
-	response := BatchLicenseResponse{
-		Licenses: make([]BatchLicenseResult, 0, len(req.LicenseIDs)),
+	// Build the response using parallel processing
+	startBuild := time.Now()
+
+	// Create a channel to collect results and limit concurrency
+	type buildResult struct {
+		index   int
+		result  BatchLicenseResult
+		isBuilt bool
 	}
 
-	for _, id := range req.LicenseIDs {
-		result := BatchLicenseResult{ID: id}
+	numWorkers := 32 // Limit concurrent goroutines
+	if len(req.LicenseIDs) < numWorkers {
+		numWorkers = len(req.LicenseIDs)
+	}
 
-		lic, found := licensesMap[id]
-		if !found {
-			result.Error = "License not found"
-			response.Licenses = append(response.Licenses, result)
-			continue
-		}
+	jobs := make(chan int, len(req.LicenseIDs))
+	results := make(chan buildResult, len(req.LicenseIDs))
 
-		// If encryption info was provided, build the full license
-		if hasEncryption {
-			// Copy encryption info to the license
-			copyInputToLicense(&req.Encryption, &lic)
+	// Start worker goroutines
+	for w := 0; w < numWorkers; w++ {
+		go func() {
+			for idx := range jobs {
+				id := req.LicenseIDs[idx]
+				result := BatchLicenseResult{ID: id}
+				isBuilt := false
 
-			// Build the license (encrypt, sign, etc.)
-			err = buildLicense(&lic, s, true)
-			if err != nil {
-				result.Error = err.Error()
-				response.Licenses = append(response.Licenses, result)
-				continue
+				lic, found := licensesMap[id]
+				if !found {
+					result.Error = "License not found"
+				} else if hasEncryption {
+					// Copy encryption info to a local copy of the license
+					copyInputToLicense(&req.Encryption, &lic)
+
+					// Build the license (encrypt, sign, etc.)
+					if err := buildLicense(&lic, s, true); err != nil {
+						result.Error = err.Error()
+					} else {
+						result.License = &lic
+						isBuilt = true
+					}
+				} else {
+					result.License = &lic
+				}
+
+				results <- buildResult{index: idx, result: result, isBuilt: isBuilt}
 			}
-		}
-
-		result.License = &lic
-		response.Licenses = append(response.Licenses, result)
+		}()
 	}
+
+	// Send all jobs
+	for i := range req.LicenseIDs {
+		jobs <- i
+	}
+	close(jobs)
+
+	// Collect all results
+	tempResults := make([]buildResult, len(req.LicenseIDs))
+	for i := 0; i < len(req.LicenseIDs); i++ {
+		tempResults[i] = <-results
+	}
+
+	// Sort results back to original order and count successes/errors
+	response := BatchLicenseResponse{
+		Licenses: make([]BatchLicenseResult, len(req.LicenseIDs)),
+	}
+	buildCount := 0
+	errorCount := 0
+	for _, r := range tempResults {
+		response.Licenses[r.index] = r.result
+		if r.result.Error != "" {
+			errorCount++
+		} else if r.isBuilt {
+			buildCount++
+		}
+	}
+
+	logging.Print(fmt.Sprintf("Batch license build completed in %dms, built %d licenses, %d errors (parallel, %d workers)", time.Since(startBuild).Milliseconds(), buildCount, errorCount, numWorkers))
 
 	// Set headers and send response
 	w.Header().Set("Content-Type", api.ContentType_JSON)
@@ -1000,6 +1052,8 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	enc.Encode(response)
+
+	logging.Print(fmt.Sprintf("Batch license request completed in %dms total for %d licenses", time.Since(startTotal).Milliseconds(), len(req.LicenseIDs)))
 }
 
 // notifyLsdServer informs the License Status Server of the creation of a new license
