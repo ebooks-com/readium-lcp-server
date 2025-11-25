@@ -11,6 +11,7 @@ import (
 	"log"
 	"time"
 
+	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/readium/readium-lcp-server/config"
 	"github.com/readium/readium-lcp-server/dbutils"
 )
@@ -174,6 +175,10 @@ func (s *sqlStore) GetByIDs(ids []string) (map[string]License, error) {
 		rights_start, rights_end, content_fk
 		FROM license WHERE id IN (`
 
+	// Check if we're using SQL Server - need to use VarChar to avoid nvarchar implicit conversion
+	driver, _ := config.GetDatabase(config.Config.LcpServer.Database)
+	isMssql := driver == "mssql"
+
 	// Create placeholders and args
 	args := make([]interface{}, len(ids))
 	for i, id := range ids {
@@ -181,7 +186,13 @@ func (s *sqlStore) GetByIDs(ids []string) (map[string]License, error) {
 			query += ", "
 		}
 		query += "?"
-		args[i] = id
+		// For SQL Server, use VarChar to match the varchar column type and enable index usage
+		// Go strings are sent as nvarchar by default, causing implicit conversion on every row
+		if isMssql {
+			args[i] = mssql.VarChar(id)
+		} else {
+			args[i] = id
+		}
 	}
 	query += ")"
 
