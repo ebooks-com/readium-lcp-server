@@ -8,7 +8,9 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+	"strings"
 
+	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/readium/readium-lcp-server/config"
 	"github.com/readium/readium-lcp-server/dbutils"
 )
@@ -19,6 +21,7 @@ var ErrNotFound = errors.New("Content not found")
 // Index is an interface
 type Index interface {
 	Get(id string) (Content, error)
+	GetByIDs(ids []string) (map[string]Content, error)
 	Add(c Content) error
 	Update(c Content) error
 	Delete(id string) error
@@ -33,6 +36,10 @@ type Content struct {
 	Length        int64  `json:"length"`
 	Sha256        string `json:"sha256"`
 	Type          string `json:"type"`
+}
+
+type contentIDRow struct {
+	ID string `mssql:"id"`
 }
 
 type dbIndex struct {
@@ -50,6 +57,56 @@ func (i dbIndex) Get(id string) (Content, error) {
 		err = ErrNotFound
 	}
 	return c, err
+}
+
+// GetByIDs returns a set of records by ids
+func (i dbIndex) GetByIDs(ids []string) (map[string]Content, error) {
+	contents := make(map[string]Content)
+	if len(ids) == 0 {
+		return contents, nil
+	}
+
+	driver, _ := config.GetDatabase(config.Config.LcpServer.Database)
+	var rows *sql.Rows
+	var err error
+
+	if driver == "mssql" {
+		contentIDRows := make([]contentIDRow, len(ids))
+		for idx, id := range ids {
+			contentIDRows[idx] = contentIDRow{ID: id}
+		}
+		tvp := mssql.TVP{
+			TypeName: "LicenseIDType",
+			Value:    contentIDRows,
+		}
+		rows, err = i.db.Query("SELECT c.id, c.encryption_key, c.location, c.length, c.sha256, c.type FROM content c INNER JOIN ? t ON c.id = t.id", tvp)
+	} else {
+		query := "SELECT id, encryption_key, location, length, sha256, type FROM content WHERE id IN ("
+		args := make([]interface{}, len(ids))
+		placeholders := make([]string, len(ids))
+		for idx, id := range ids {
+			args[idx] = id
+			placeholders[idx] = "?"
+		}
+		query += strings.Join(placeholders, ",") + ")"
+
+		query = dbutils.GetParamQuery(config.Config.LcpServer.Database, query)
+		rows, err = i.db.Query(query, args...)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var c Content
+		if err := rows.Scan(&c.ID, &c.EncryptionKey, &c.Location, &c.Length, &c.Sha256, &c.Type); err != nil {
+			return nil, err
+		}
+		contents[c.ID] = c
+	}
+	return contents, nil
 }
 
 // Add inserts a record
