@@ -164,40 +164,60 @@ func (s *sqlStore) Get(id string) (License, error) {
 	return l, err
 }
 
+type licenseIDRow struct {
+	ID string `mssql:"id"`
+}
+
 // GetByIDs retrieves multiple licenses by their IDs in a single query
 func (s *sqlStore) GetByIDs(ids []string) (map[string]License, error) {
 	if len(ids) == 0 {
 		return make(map[string]License), nil
 	}
 
-	// Build the query with placeholders
-	query := `SELECT id, user_id, provider, issued, updated, rights_print, rights_copy,
-		rights_start, rights_end, content_fk
-		FROM license WHERE id IN (`
+	var query string
+	var args []interface{}
 
-	// Check if we're using SQL Server - need to use VarChar to avoid nvarchar implicit conversion
+	// Check if we're using SQL Server
 	driver, _ := config.GetDatabase(config.Config.LcpServer.Database)
 	isMssql := driver == "mssql"
 
-	// Create placeholders and args
-	args := make([]interface{}, len(ids))
-	for i, id := range ids {
-		if i > 0 {
-			query += ", "
+	if isMssql {
+		// Use Table Valued Parameter for SQL Server to avoid parameter limit
+		query = `SELECT l.id, l.user_id, l.provider, l.issued, l.updated, l.rights_print, 
+			l.rights_copy, l.rights_start, l.rights_end, l.content_fk
+			FROM license l
+			INNER JOIN ? t ON l.id = t.id`
+
+		tvpRows := make([]licenseIDRow, len(ids))
+		for i, id := range ids {
+			tvpRows[i] = licenseIDRow{ID: id}
 		}
-		query += "?"
-		// For SQL Server, use VarChar to match the varchar column type and enable index usage
-		// Go strings are sent as nvarchar by default, causing implicit conversion on every row
-		if isMssql {
-			args[i] = mssql.VarChar(id)
-		} else {
+
+		tvp := mssql.TVP{
+			TypeName: "LicenseIDType",
+			Value:    tvpRows,
+		}
+		args = []interface{}{tvp}
+	} else {
+		// Build the query with placeholders for other databases
+		query = `SELECT id, user_id, provider, issued, updated, rights_print, rights_copy,
+		rights_start, rights_end, content_fk
+		FROM license WHERE id IN (`
+
+		// Create placeholders and args
+		args = make([]interface{}, len(ids))
+		for i, id := range ids {
+			if i > 0 {
+				query += ", "
+			}
+			query += "?"
 			args[i] = id
 		}
-	}
-	query += ")"
+		query += ")"
 
-	// Convert placeholders for the specific database
-	query = dbutils.GetParamQuery(config.Config.LcpServer.Database, query)
+		// Convert placeholders for the specific database
+		query = dbutils.GetParamQuery(config.Config.LcpServer.Database, query)
+	}
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {

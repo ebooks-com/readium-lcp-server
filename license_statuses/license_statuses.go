@@ -10,6 +10,7 @@ import (
 	"log"
 	"time"
 
+	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/readium/readium-lcp-server/config"
 	"github.com/readium/readium-lcp-server/dbutils"
 	"github.com/readium/readium-lcp-server/status"
@@ -180,29 +181,60 @@ func (i dbLicenseStatuses) GetByLicenseID(licenseID string) (*LicenseStatus, err
 	return &ls, err
 }
 
+type licenseStatusIDRow struct {
+	ID string `mssql:"id"`
+}
+
 // GetByLicenseIDs retrieves multiple license statuses by their license IDs in a single query
 func (i dbLicenseStatuses) GetByLicenseIDs(licenseIDs []string) (map[string]*LicenseStatus, error) {
 	if len(licenseIDs) == 0 {
 		return make(map[string]*LicenseStatus), nil
 	}
 
-	// Build the query with placeholders
-	query := `SELECT id, status, license_updated, status_updated, device_count, potential_rights_end, license_ref, rights_end
+	var query string
+	var args []interface{}
+
+	// Check if we're using SQL Server
+	driver, _ := config.GetDatabase(config.Config.LsdServer.Database)
+	isMssql := driver == "mssql"
+
+	if isMssql {
+		// Use Table Valued Parameter for SQL Server to avoid parameter limit
+		query = `SELECT l.id, l.status, l.license_updated, l.status_updated, l.device_count, 
+			l.potential_rights_end, l.license_ref, l.rights_end
+			FROM license_status l
+			INNER JOIN ? t ON l.license_ref = t.id`
+
+		tvpRows := make([]licenseStatusIDRow, len(licenseIDs))
+		for idx, id := range licenseIDs {
+			tvpRows[idx] = licenseStatusIDRow{ID: id}
+		}
+
+		tvp := mssql.TVP{
+			TypeName: "LicenseStatusIDType",
+			Value:    tvpRows,
+		}
+		args = []interface{}{tvp}
+
+	} else {
+		// Build the query with placeholders for other databases
+		query = `SELECT id, status, license_updated, status_updated, device_count, potential_rights_end, license_ref, rights_end
 		FROM license_status WHERE license_ref IN (`
 
-	// Create placeholders and args
-	args := make([]interface{}, len(licenseIDs))
-	for idx, id := range licenseIDs {
-		if idx > 0 {
-			query += ", "
+		// Create placeholders and args
+		args = make([]interface{}, len(licenseIDs))
+		for idx, id := range licenseIDs {
+			if idx > 0 {
+				query += ", "
+			}
+			query += "?"
+			args[idx] = id
 		}
-		query += "?"
-		args[idx] = id
-	}
-	query += ")"
+		query += ")"
 
-	// Convert placeholders for the specific database
-	query = dbutils.GetParamQuery(config.Config.LsdServer.Database, query)
+		// Convert placeholders for the specific database
+		query = dbutils.GetParamQuery(config.Config.LsdServer.Database, query)
+	}
 
 	rows, err := i.db.Query(query, args...)
 	if err != nil {

@@ -1,3 +1,7 @@
+IF TYPE_ID(N'LicenseIDType') IS NULL
+CREATE TYPE LicenseIDType AS TABLE (id varchar(255) NOT NULL);
+GO
+
 CREATE TABLE content (
     id varchar(255) PRIMARY KEY NOT NULL,
     encryption_key varbinary(64) NOT NULL,

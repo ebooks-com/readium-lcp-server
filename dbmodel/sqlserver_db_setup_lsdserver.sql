@@ -1,3 +1,7 @@
+IF TYPE_ID(N'LicenseStatusIDType') IS NULL
+CREATE TYPE LicenseStatusIDType AS TABLE (id varchar(255) NOT NULL);
+GO
+
 CREATE TABLE license_status (
   id integer IDENTITY PRIMARY KEY,
   status tinyint NOT NULL,
