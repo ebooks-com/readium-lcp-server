@@ -89,11 +89,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Configure connection pool for better concurrency under load
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(10)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	db.SetConnMaxIdleTime(2 * time.Minute)
+	// Configure database connection pool
+	db.SetMaxOpenConns(25)                 // Limit maximum concurrent connections
+	db.SetMaxIdleConns(10)                 // Keep 10 connections ready for reuse
+	db.SetConnMaxLifetime(5 * time.Minute) // Recycle connections every 5 minutes
+	db.SetConnMaxIdleTime(2 * time.Minute) // Close idle connections after 2 minutes
 
 	if driver == "sqlite3" && !strings.Contains(cnxn, "_journal") {
 		_, err = db.Exec("PRAGMA journal_mode = WAL")
@@ -169,7 +169,8 @@ func main() {
 }
 
 func HandleSignals() {
-	sigChan := make(chan os.Signal)
+	// Buffer size should be >= number of signals we're listening for
+	sigChan := make(chan os.Signal, 1) // or 3 to match the exact number of signals
 	go func() {
 		stacktrace := make([]byte, 1<<20)
 		for sig := range sigChan {

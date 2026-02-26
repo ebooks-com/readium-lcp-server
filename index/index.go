@@ -21,6 +21,7 @@ var ErrNotFound = errors.New("Content not found")
 // Index is an interface
 type Index interface {
 	Get(id string) (Content, error)
+	GetFromLicense(id string) (Content, error)
 	GetByIDs(ids []string) (map[string]Content, error)
 	Add(c Content) error
 	Update(c Content) error
@@ -45,6 +46,7 @@ type contentIDRow struct {
 type dbIndex struct {
 	db        *sql.DB
 	dbGetByID *sql.Stmt
+	dbGetByLicense *sql.Stmt
 	dbList    *sql.Stmt
 }
 
@@ -107,6 +109,16 @@ func (i dbIndex) GetByIDs(ids []string) (map[string]Content, error) {
 		contents[c.ID] = c
 	}
 	return contents, nil
+}
+
+func (i dbIndex) GetFromLicense(id string) (Content, error) {
+	row := i.dbGetByLicense.QueryRow(id)
+	var c Content
+	err := row.Scan(&c.ID, &c.EncryptionKey, &c.Location, &c.Length, &c.Sha256, &c.Type)
+	if err != nil {
+		err = ErrNotFound
+	}
+	return c, err
 }
 
 // Add inserts a record
@@ -192,11 +204,15 @@ func Open(db *sql.DB) (i Index, err error) {
 	if err != nil {
 		return
 	}
+	dbGetByLicense, err := db.Prepare(dbutils.GetParamQuery(config.Config.LcpServer.Database, "SELECT c.id,c.encryption_key,c.location,c.length,c.sha256,c.type FROM content c INNER JOIN license l ON c.id = l.content_fk WHERE l.id = ?"))
+	if err != nil {
+		return
+	}
 	dbList, err := db.Prepare("SELECT id,encryption_key,location,length,sha256,type FROM content")
 	if err != nil {
 		return
 	}
-	i = dbIndex{db, dbGetByID, dbList}
+	i = dbIndex{db, dbGetByID, dbGetByLicense, dbList}
 	return
 }
 
