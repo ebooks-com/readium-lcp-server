@@ -31,7 +31,7 @@ type LCPServerMsgV2 struct {
 	EncryptionKey []byte `json:"encryption_key"`
 	Href          string `json:"href"`
 	ContentType   string `json:"content_type"`
-	Size          uint32 `json:"size"`
+	Size          int64  `json:"size"`
 	Checksum      string `json:"checksum"`
 }
 
@@ -109,7 +109,7 @@ func NotifyLCPServer(pub Publication, update bool, prov, lcpsv string, v2 bool, 
 		msg.Output = pub.Location
 		msg.FileName = pub.FileName
 		msg.ContentType = pub.ContentType
-		msg.Size = int64(pub.Size)
+		msg.Size = pub.Size
 		msg.Checksum = pub.Checksum
 
 		jsonBody, err = json.Marshal(msg)

@@ -45,7 +45,7 @@ type Publication struct {
 	EncryptionKey []byte
 	Location      string
 	ContentType   string
-	Size          uint32
+	Size          int64
 	Checksum      string
 }
 
@@ -362,7 +362,7 @@ func processEPUB(pub *Publication, encrypter crypto.Encrypter, contentKey string
 	stats, err := outputFile.Stat()
 	if err == nil && (stats.Size() > 0) {
 		filesize := stats.Size()
-		pub.Size = uint32(filesize)
+		pub.Size = filesize
 		cs := checksum(outputFile)
 		pub.Checksum = cs
 	}
@@ -568,7 +568,7 @@ func buildEncryptedRPF(pub *Publication, encrypter crypto.Encrypter, contentKey 
 	stats, err := outputFile.Stat()
 	if err == nil && (stats.Size() > 0) {
 		filesize := stats.Size()
-		pub.Size = uint32(filesize)
+		pub.Size = filesize
 		cs := checksum(outputFile)
 		pub.Checksum = cs
 	}
