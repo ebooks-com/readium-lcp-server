@@ -55,8 +55,8 @@ type FrontendServerInfo struct {
 	ServerInfo          `yaml:",inline"`
 	Directory           string `yaml:"directory,omitempty"`
 	ProviderUri         string `yaml:"provider_uri"`
-	RightPrint          int32  `yaml:"right_print"`
-	RightCopy           int32  `yaml:"right_copy"`
+	RightPrint          int64  `yaml:"right_print"`
+	RightCopy           int64  `yaml:"right_copy"`
 	MasterRepository    string `yaml:"master_repository"`
 	EncryptedRepository string `yaml:"encrypted_repository"`
 }

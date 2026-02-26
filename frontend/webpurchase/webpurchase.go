@@ -222,7 +222,7 @@ func (pManager PurchaseManager) GenerateOrGetLicense(purchase Purchase) (license
 	partialLicense.Encryption.UserKey = userKey
 
 	// In case of a creation of license, add the user rights
-	var copy, print int32
+	var copy, print int64
 	if purchase.LicenseUUID == nil {
 		// in case of undefined conf values for copy and print rights,
 		// these rights will be set to zero

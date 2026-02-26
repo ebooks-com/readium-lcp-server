@@ -72,8 +72,8 @@ type UserInfo struct {
 }
 
 type UserRights struct {
-	Print *int32     `json:"print,omitempty"`
-	Copy  *int32     `json:"copy,omitempty"`
+	Print *int64     `json:"print,omitempty"`
+	Copy  *int64     `json:"copy,omitempty"`
 	Start *time.Time `json:"start,omitempty"`
 	End   *time.Time `json:"end,omitempty"`
 }

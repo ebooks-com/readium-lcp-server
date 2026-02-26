@@ -50,9 +50,9 @@ func TestCRUD(t *testing.T) {
 	l.Rights.Start = &rstart
 	rend := rstart.Add(time.Hour * 100)
 	l.Rights.End = &rend
-	rprint := int32(100)
+	rprint := int64(100)
 	l.Rights.Print = &rprint
-	rcopy := int32(1000)
+	rcopy := int64(1000)
 	l.Rights.Copy = &rcopy
 
 	err = st.Add(l)
@@ -109,9 +109,9 @@ func TestCRUD(t *testing.T) {
 	l.Rights.Start = &rstart
 	rend = rstart.Add(time.Hour * 100)
 	l.Rights.End = &rend
-	rprint = int32(200)
+	rprint = int64(200)
 	l.Rights.Print = &rprint
-	rcopy = int32(2000)
+	rcopy = int64(2000)
 	l.Rights.Copy = &rcopy
 
 	err = st.UpdateRights(l)
