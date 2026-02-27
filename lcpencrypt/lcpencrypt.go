@@ -36,6 +36,7 @@ func showHelpAndExit() {
 	fmt.Println("-cover      optional, boolean, indicates that a cover should be generated")
 	fmt.Println("-pdfnometa  optional, boolean, indicates that PDF metadata must not be extracted")
 	fmt.Println("-contentid  optional, publication identifier; if omitted a uuid is generated")
+	fmt.Println("-contentkey optional, base64 encoded content key; if omitted a random content key is generated")
 	fmt.Println("-lcpsv      optional, URL, host name of the License Server to be notified; syntax http://username:password@example.com")
 	fmt.Println("-v2         optional, boolean, indicates communication with a License Server v2")
 	// these parameters are deprecated, let's be silent about them in the help
@@ -67,6 +68,7 @@ func main() {
 	pdfnometa := flag.Bool("pdfnometa", false, "boolean, indicates that PDF metadata must not be extracted")
 	useFilenameAs := flag.String("usefnas", "", "if set to 'uuid', the file name is used as publication uuid")
 	contentid := flag.String("contentid", "", "imposed publication UUID, used to update an existing publication")
+	contentkeyFlag := flag.String("contentkey", "", "base64 encoded content key; if omitted a random content key is generated")
 	lcpsv := flag.String("lcpsv", "", "URL, host name of the License server which is notified; the preferred syntax is http://username:password@example.com")
 	v2 := flag.Bool("v2", false, "boolean, indicates a v2 License server")
 	username := flag.String("login", "", "optional unless lcpsv is used, username for the License server")
@@ -113,8 +115,8 @@ func main() {
 		*contentid = filen
 	}
 
-	var contentkey string
-	if *contentid != "" {
+	contentkey := *contentkeyFlag
+	if *contentid != "" && contentkey == "" {
 		// warning: this is a synchronous REST call
 		// contentKey is not initialized if the content does not exist in the License Server
 		var err error
