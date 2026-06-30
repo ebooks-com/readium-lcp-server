@@ -38,6 +38,16 @@ type sqlStore struct {
 	dbListByContentID *sql.Stmt
 }
 
+// varcharParam binds an id as SQL Server varchar against the varchar license.id column,
+// keeping the PK seek instead of a CONVERT-forced clustered-index scan. It delegates to
+// the shared dbutils helper (also used by index.GetFromLicense) and is a no-op for every
+// other driver. Verified against production (ebooks.License/ebooks.Content): only
+// license.id is varchar; content.id and license.content_fk are nvarchar, so the
+// content_fk lookups (ListByContentID/TouchByContentID) are correctly left unwrapped.
+func varcharParam(v string) interface{} {
+	return dbutils.VarcharParam(config.Config.LcpServer.Database, v)
+}
+
 // ListAll lists all licenses in ante-chronological order
 // pageNum starts at 0
 func (s *sqlStore) ListAll(pageSize int, pageNum int) func() (LicenseReport, error) {
@@ -104,7 +114,7 @@ func (s *sqlStore) ListByContentID(contentID string, pageSize int, pageNum int) 
 func (s *sqlStore) UpdateRights(l License) error {
 
 	result, err := s.db.Exec(dbutils.GetParamQuery(config.Config.LcpServer.Database, "UPDATE license SET rights_print=?, rights_copy=?, rights_start=?, rights_end=?, updated=? WHERE id=?"),
-		l.Rights.Print, l.Rights.Copy, l.Rights.Start, l.Rights.End, time.Now().UTC().Truncate(time.Second), l.ID)
+		l.Rights.Print, l.Rights.Copy, l.Rights.Start, l.Rights.End, time.Now().UTC().Truncate(time.Second), varcharParam(l.ID))
 
 	if err == nil {
 		if r, _ := result.RowsAffected(); r == 0 {
@@ -136,7 +146,7 @@ func (s *sqlStore) Update(l License) error {
 		time.Now().UTC().Truncate(time.Second),
 		l.Rights.Print, l.Rights.Copy, l.Rights.Start, l.Rights.End,
 		l.ContentID,
-		l.ID)
+		varcharParam(l.ID))
 
 	return err
 }
@@ -145,7 +155,7 @@ func (s *sqlStore) Update(l License) error {
 func (s *sqlStore) UpdateLsdStatus(id string, status int32) error {
 
 	_, err := s.db.Exec(dbutils.GetParamQuery(config.Config.LcpServer.Database, `UPDATE license SET lsd_status =? WHERE id=?`),
-		status, id)
+		status, varcharParam(id))
 
 	return err
 }
@@ -153,7 +163,7 @@ func (s *sqlStore) UpdateLsdStatus(id string, status int32) error {
 // Get a license from the db
 func (s *sqlStore) Get(id string) (License, error) {
 
-	row := s.dbGetByID.QueryRow(id)
+	row := s.dbGetByID.QueryRow(varcharParam(id))
 	var l License
 	l.Rights = new(UserRights)
 	err := row.Scan(&l.ID, &l.User.ID, &l.Provider, &l.Issued, &l.Updated,

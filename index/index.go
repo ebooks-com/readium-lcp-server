@@ -52,6 +52,8 @@ type dbIndex struct {
 
 // Get returns a record by id
 func (i dbIndex) Get(id string) (Content, error) {
+	// content.id is nvarchar in production, so the default nvarchar binding already
+	// seeks; no varchar wrap here (unlike GetFromLicense, which filters on varchar license.id).
 	row := i.dbGetByID.QueryRow(id)
 	var c Content
 	err := row.Scan(&c.ID, &c.EncryptionKey, &c.Location, &c.Length, &c.Sha256, &c.Type)
@@ -112,7 +114,9 @@ func (i dbIndex) GetByIDs(ids []string) (map[string]Content, error) {
 }
 
 func (i dbIndex) GetFromLicense(id string) (Content, error) {
-	row := i.dbGetByLicense.QueryRow(id)
+	// The predicate is WHERE l.id = ?; license.id is varchar, so bind as varchar to
+	// keep mssql on the PK seek (see dbGetByLicense query below).
+	row := i.dbGetByLicense.QueryRow(dbutils.VarcharParam(config.Config.LcpServer.Database, id))
 	var c Content
 	err := row.Scan(&c.ID, &c.EncryptionKey, &c.Location, &c.Length, &c.Sha256, &c.Type)
 	if err != nil {
