@@ -27,6 +27,14 @@ func TestCRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Open() prepares the GetFromLicense statement, which joins the license table; the
+	// index package only creates the content table for sqlite, so create a minimal
+	// license table here or Prepare fails with "no such table: license".
+	_, err = db.Exec("CREATE TABLE license (id varchar(255) PRIMARY KEY NOT NULL, content_fk varchar(255) NOT NULL)")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	idx, err := Open(db)
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +85,19 @@ func TestCRUD(t *testing.T) {
 	}
 	if len(contents) != 2 {
 		t.Fatal("Failed to List two rows")
+	}
+
+	// GetFromLicense resolves content through the license.content_fk join.
+	_, err = db.Exec("INSERT INTO license (id, content_fk) VALUES (?, ?)", "lic-1", c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cFromLicense, err := idx.GetFromLicense("lic-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cFromLicense.ID != c.ID {
+		t.Fatal("GetFromLicense returned the wrong content")
 	}
 
 }
