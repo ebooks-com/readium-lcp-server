@@ -24,6 +24,7 @@ require (
 	github.com/urfave/negroni v1.0.0
 	golang.org/x/net v0.47.0
 	golang.org/x/text v0.31.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -39,5 +40,4 @@ require (
 	github.com/rickb777/plural v1.4.4 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
