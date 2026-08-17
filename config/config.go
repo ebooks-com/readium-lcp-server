@@ -113,8 +113,15 @@ type Localization struct {
 
 type Logging struct {
 	Directory      string `yaml:"directory"`
+	Level          string `yaml:"level"`
+	MaxSizeMB      int    `yaml:"max_size_mb"`
+	MaxBackups     int    `yaml:"max_backups"`
+	MaxAgeDays     int    `yaml:"max_age_days"`
+	Compress       *bool  `yaml:"compress"`
+	Salt           string `yaml:"salt"`
 	SlackToken     string `yaml:"slack_token"`
 	SlackChannelID string `yaml:"slack_channel"`
+	SlackLevel     string `yaml:"slack_level"`
 }
 
 // Config is a global variable which contains the server configuration

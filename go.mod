@@ -39,4 +39,5 @@ require (
 	github.com/rickb777/plural v1.4.4 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
