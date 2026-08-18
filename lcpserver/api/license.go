@@ -661,7 +661,7 @@ func UpdateLicense(w http.ResponseWriter, r *http.Request, s Server) {
 	}
 	// update licOut using information found in licIn
 	if licIn.User.ID != "" {
-		log.Println("new user id: ", licIn.User.ID)
+		logging.InfoContext(r.Context(), "license user changed", "license_id", licenseID, logging.UserID(licIn.User.ID))
 		licOut.User.ID = licIn.User.ID
 	}
 	if licIn.Provider != "" {

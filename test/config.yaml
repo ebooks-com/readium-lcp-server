@@ -76,7 +76,7 @@ license_status:
     #renew_days: 7
 
 
-# Logging (optional, used by the License Server and the Status Server)
+# Logging (optional, used by the License Server, the Status Server and the Frontend server)
 #
 # Without this section both servers log to stderr at info level. A Windows
 # service discards stderr, so set `directory` there or nothing is readable.

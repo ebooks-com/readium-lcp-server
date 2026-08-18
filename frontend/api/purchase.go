@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/readium/readium-lcp-server/api"
 	"github.com/readium/readium-lcp-server/frontend/webpurchase"
+	"github.com/readium/readium-lcp-server/logging"
 	"github.com/readium/readium-lcp-server/problem"
 
 	"github.com/Machiel/slugify"
@@ -128,9 +129,9 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request, s IServer) {
 	w.WriteHeader(http.StatusCreated)
 
 	if purchase.Type == webpurchase.LOAN {
-		log.Println("user " + strconv.Itoa(int(purchase.User.ID)) + " lent publication " + strconv.Itoa(int(purchase.Publication.ID)) + " until " + purchase.EndDate.String())
+		logging.InfoContext(r.Context(), "publication lent", logging.UserID(strconv.FormatInt(purchase.User.ID, 10)), "publication_id", purchase.Publication.ID, "end", purchase.EndDate.String())
 	} else {
-		log.Println("user " + strconv.Itoa(int(purchase.User.ID)) + " bought publication " + strconv.Itoa(int(purchase.Publication.ID)))
+		logging.InfoContext(r.Context(), "publication bought", logging.UserID(strconv.FormatInt(purchase.User.ID, 10)), "publication_id", purchase.Publication.ID)
 	}
 }
 
