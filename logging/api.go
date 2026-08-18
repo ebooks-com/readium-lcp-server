@@ -71,6 +71,7 @@ func Close() error {
 	// Records emitted during and after shutdown reach stderr, since
 	// bufferedFile.Write rejects them once closed.
 	logger.Store(stderrLogger())
+	stdlogTarget.Store(stderrLogger())
 
 	if s := activeSlack.Swap(nil); s != nil {
 		s.Close()
