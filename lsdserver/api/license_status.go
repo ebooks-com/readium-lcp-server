@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -47,7 +46,7 @@ func CreateLicenseStatusDocument(w http.ResponseWriter, r *http.Request, s Serve
 	}
 
 	// add a log
-	logging.Print("Create a Status Doc for License " + lic.ID)
+	logging.InfoContext(r.Context(), "status document created", "license_id", lic.ID)
 
 	var ls licensestatuses.LicenseStatus
 	makeLicenseStatus(lic, &ls)
@@ -70,7 +69,7 @@ func GetLicenseStatusDocument(w http.ResponseWriter, r *http.Request, s Server) 
 	licenseID := vars["key"]
 
 	// add a log
-	logging.Print("Get a Status Doc for License " + licenseID)
+	logging.InfoContext(r.Context(), "status document fetched", "license_id", licenseID)
 
 	licenseStatus, err := s.LicenseStatuses().GetByLicenseID(licenseID)
 	if err != nil {
@@ -161,17 +160,17 @@ func GetLicenseStatusesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 	}
 
 	// Add a log
-	logging.Print(fmt.Sprintf("Batch get %d license statuses started", len(req.LicenseIDs)))
+	logging.DebugContext(r.Context(), "batch status request started", "count", len(req.LicenseIDs))
 
 	// Fetch all license statuses in a single query
 	startDb := time.Now()
 	statusesMap, err := s.LicenseStatuses().GetByLicenseIDs(req.LicenseIDs)
 	if err != nil {
-		logging.Print(fmt.Sprintf("Batch status DB query failed after %dms: %s", time.Since(startDb).Milliseconds(), err.Error()))
+		logging.ErrorContext(r.Context(), "batch status query failed", "elapsed_ms", time.Since(startDb).Milliseconds(), "err", err)
 		problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
 		return
 	}
-	logging.Print(fmt.Sprintf("Batch status DB query completed in %dms, found %d statuses", time.Since(startDb).Milliseconds(), len(statusesMap)))
+	logging.DebugContext(r.Context(), "batch status query complete", "elapsed_ms", time.Since(startDb).Milliseconds(), "found", len(statusesMap))
 
 	currentDateTime := time.Now().UTC().Truncate(time.Second)
 
@@ -236,7 +235,7 @@ func GetLicenseStatusesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 		return
 	}
 
-	logging.Print(fmt.Sprintf("Batch status request completed in %dms total for %d licenses", time.Since(startTotal).Milliseconds(), len(req.LicenseIDs)))
+	logging.InfoContext(r.Context(), "batch status request complete", "elapsed_ms", time.Since(startTotal).Milliseconds(), "count", len(req.LicenseIDs))
 }
 
 // RegisterDevice registers a device for a given license,
@@ -256,7 +255,7 @@ func RegisterDevice(w http.ResponseWriter, r *http.Request, s Server) {
 	deviceName := r.FormValue("name")
 
 	// add a log
-	logging.Print("Register the Device " + deviceName + " with id " + deviceID + " for License " + licenseID)
+	logging.InfoContext(r.Context(), "device registered", logging.DeviceName(deviceName), "device_id", deviceID, "license_id", licenseID)
 
 	dILen := len(deviceID)
 	dNLen := len(deviceName)
@@ -302,7 +301,7 @@ func RegisterDevice(w http.ResponseWriter, r *http.Request, s Server) {
 		return
 	}
 	if deviceStatus != "" { // this is not considered a server side error, even if the spec states that devices must not do it.
-		logging.Print("The Device has already been registered")
+		logging.WarnContext(r.Context(), "device already registered", "device_id", deviceID, "license_id", licenseID)
 		// a status document will be sent back to the caller
 
 	} else {
@@ -332,7 +331,7 @@ func RegisterDevice(w http.ResponseWriter, r *http.Request, s Server) {
 			return
 		}
 		// add a log
-		logging.Print("The new Device Count is " + strconv.Itoa(*licenseStatus.DeviceCount))
+		logging.InfoContext(r.Context(), "device count changed", "device_count", *licenseStatus.DeviceCount, "license_id", licenseID)
 
 	} // the device has just been registered for this license
 
@@ -385,7 +384,7 @@ func LendingReturn(w http.ResponseWriter, r *http.Request, s Server) {
 	}
 
 	// add a log
-	logging.Print("Return the Publication from Device " + deviceName + " with id " + deviceID + " for License " + licenseID)
+	logging.InfoContext(r.Context(), "publication returned", logging.DeviceName(deviceName), "device_id", deviceID, "license_id", licenseID)
 
 	// check & set the status of the license status according to its current value
 	switch licenseStatus.Status {
@@ -482,7 +481,7 @@ func LendingRenewal(w http.ResponseWriter, r *http.Request, s Server) {
 	deviceName := r.FormValue("name")
 
 	// add a log
-	logging.Print("Renew the Loan from Device " + deviceName + " with id " + deviceID + " for License " + licenseID)
+	logging.InfoContext(r.Context(), "loan renewal requested", logging.DeviceName(deviceName), "device_id", deviceID, "license_id", licenseID)
 
 	// check the request parameters
 	if (len(deviceName) > 255) || (len(deviceID) > 255) {
@@ -580,7 +579,7 @@ func LendingRenewal(w http.ResponseWriter, r *http.Request, s Server) {
 
 	if !norenew {
 		// add a log
-		logging.Print("Loan renewed until " + suggestedEnd.UTC().Format(time.RFC3339))
+		logging.InfoContext(r.Context(), "loan renewed", "license_id", licenseID, "end", suggestedEnd.UTC().Format(time.RFC3339))
 
 		// create a renew event
 		event := makeEvent(status.EVENT_RENEWED, deviceName, deviceID, licenseStatus.ID)
@@ -654,7 +653,7 @@ func ExtendSubscription(w http.ResponseWriter, r *http.Request, s Server) {
 	licenseID := vars["key"]
 
 	// add a log
-	logging.Print("Extend the Subscription for License " + licenseID)
+	logging.InfoContext(r.Context(), "subscription extension requested", "license_id", licenseID)
 
 	// get the license status
 	licenseStatus, err := s.LicenseStatuses().GetByLicenseID(licenseID)
@@ -738,7 +737,7 @@ func ExtendSubscription(w http.ResponseWriter, r *http.Request, s Server) {
 	}
 
 	// add a log
-	logging.Print("License extended until " + suggestedEnd.UTC().Format(time.RFC3339))
+	logging.InfoContext(r.Context(), "subscription extended", "license_id", licenseID, "end", suggestedEnd.UTC().Format(time.RFC3339))
 
 	// create a renew event with a static device name
 	event := makeEvent(status.EVENT_RENEWED, "subscription", "suscription", licenseStatus.ID)
@@ -918,7 +917,7 @@ func LendingCancellation(w http.ResponseWriter, r *http.Request, s Server) {
 	vars := mux.Vars(r)
 	licenseID := vars["key"]
 
-	logging.Print("Revoke or Cancel the License " + licenseID)
+	logging.WarnContext(r.Context(), "license revoked or cancelled", "license_id", licenseID)
 
 	// get the current license status
 	licenseStatus, err := s.LicenseStatuses().GetByLicenseID(licenseID)
