@@ -182,6 +182,7 @@ func HandleSignals() {
 				fallthrough
 			case syscall.SIGTERM:
 				fmt.Println("Shutting down...")
+				logging.Close()
 				os.Exit(0)
 			}
 		}

@@ -30,6 +30,7 @@ import (
 	"github.com/readium/readium-lcp-server/frontend/webpurchase"
 	"github.com/readium/readium-lcp-server/frontend/webrepository"
 	"github.com/readium/readium-lcp-server/frontend/webuser"
+	"github.com/readium/readium-lcp-server/logging"
 )
 
 func main() {
@@ -41,6 +42,10 @@ func main() {
 	}
 	config.ReadConfig(configFile)
 	log.Println("Config from " + configFile)
+
+	if err := logging.Init(config.Config.Logging); err != nil {
+		panic(err)
+	}
 
 	err = config.SetPublicUrls()
 	if err != nil {
@@ -163,6 +168,7 @@ func HandleSignals() {
 				fallthrough
 			case syscall.SIGTERM:
 				fmt.Println("Shutting down...")
+				logging.Close()
 				os.Exit(0)
 			}
 		}
