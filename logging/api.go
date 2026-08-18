@@ -2,6 +2,7 @@ package logging
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -81,3 +82,15 @@ func Close() error {
 	}
 	return nil
 }
+
+// errorWriter adapts Error onto io.Writer, for libraries that accept only a
+// *log.Logger.
+type errorWriter struct{}
+
+func (errorWriter) Write(p []byte) (int, error) {
+	logger.Load().Error(strings.TrimRight(string(p), "\r\n"))
+	return len(p), nil
+}
+
+// ErrorWriter returns a writer that records everything written to it at ERROR.
+func ErrorWriter() io.Writer { return errorWriter{} }

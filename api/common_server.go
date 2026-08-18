@@ -15,6 +15,7 @@ import (
 	"github.com/rs/cors"
 	"github.com/urfave/negroni"
 
+	"github.com/readium/readium-lcp-server/logging"
 	"github.com/readium/readium-lcp-server/problem"
 )
 
@@ -53,6 +54,8 @@ func CreateServerRouter(tplPath string) ServerRouter {
 	//n := negroni.Classic() == negroni.New(negroni.NewRecovery(), negroni.NewLogger(), negroni.NewStatic(...))
 	n := negroni.New()
 
+	n.Use(negroni.HandlerFunc(logging.RequestIDMiddleware))
+
 	// HTTP client can emit requests with custom header:
 	//X-Add-Delay: 300ms
 	//X-Add-Delay: 2.5s
@@ -64,6 +67,7 @@ func CreateServerRouter(tplPath string) ServerRouter {
 	//https://github.com/urfave/negroni#recovery
 	recovery := negroni.NewRecovery()
 	recovery.PrintStack = true
+	recovery.Logger = log.New(logging.ErrorWriter(), "", 0)
 	n.Use(recovery)
 
 	//https://github.com/urfave/negroni#logger
