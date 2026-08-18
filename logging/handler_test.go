@@ -175,3 +175,45 @@ func TestSetupWarnsOnAnUnrecognisedLevel(t *testing.T) {
 		t.Errorf("log %q, want a warning about the level", body)
 	}
 }
+
+func TestSetupWritesToStderrAsWellAsTheFile(t *testing.T) {
+	captured := captureStderr(t)
+
+	path := filepath.Join(t.TempDir(), "test.log")
+	if err := setup(config.Logging{Directory: path, Salt: "s", Level: "info"}); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	Warn("both sinks")
+
+	if err := Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	if body := readFileOrEmpty(t, path); !strings.Contains(body, "both sinks") {
+		t.Errorf("file holds %q, want the record", body)
+	}
+	if console := captured(); !strings.Contains(console, "both sinks") {
+		t.Errorf("stderr holds %q, want the record", console)
+	}
+}
+
+func captureStderr(t *testing.T) func() string {
+	t.Helper()
+
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+
+	previous := os.Stderr
+	os.Stderr = write
+	t.Cleanup(func() { os.Stderr = previous })
+
+	return func() string {
+		write.Close()
+		var buf bytes.Buffer
+		buf.ReadFrom(read)
+		return buf.String()
+	}
+}

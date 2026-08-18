@@ -81,7 +81,7 @@ func setup(cfg config.Logging) error {
 
 	var out io.Writer = os.Stderr
 	if file != nil {
-		out = file
+		out = io.MultiWriter(os.Stderr, file)
 	}
 
 	level, levelRecognised := parseLevel(cfg.Level)
