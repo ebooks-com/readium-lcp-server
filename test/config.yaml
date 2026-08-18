@@ -74,3 +74,28 @@ license_status:
     #return: true
     #renting_days: 60
     #renew_days: 7
+
+
+# Logging (optional, used by the License Server and the Status Server)
+#
+# Without this section both servers log to stderr at info level. A Windows
+# service discards stderr, so set `directory` there or nothing is readable.
+#logging:
+#    # path of the log file, despite the key name
+#    directory: "<LCP_HOME>/logs/lcp.log"
+#    # debug | info | warn | error
+#    level: "info"
+#    # rotate once the file passes this size, keep this many, for this long
+#    max_size_mb: 100
+#    max_backups: 14
+#    max_age_days: 30
+#    compress: true
+#    # key used to hash user ids and device names before they are written.
+#    # Without it a random key is generated at start-up, so hashes stop matching
+#    # across restarts and never match between servers.
+#    salt: "<RANDOM_STRING>"
+#    # optional alerting. Only records at slack_level and above are sent, and
+#    # delivery happens off the request path.
+#    slack_token: ""
+#    slack_channel: ""
+#    slack_level: "error"
