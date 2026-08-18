@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 
 	"github.com/gorilla/mux"
 
@@ -132,7 +131,7 @@ func AddContent(w http.ResponseWriter, r *http.Request, s Server) {
 	}
 
 	// add a log
-	logging.Print("Add publication " + contentID)
+	logging.InfoContext(r.Context(), "publication added", "content_id", contentID)
 
 	// if the encrypted publication has not been already stored by lcpencrypt
 	if encrypted.StorageMode == Storage_none {
@@ -209,7 +208,7 @@ func ListContents(w http.ResponseWriter, r *http.Request, s Server) {
 	}
 
 	// add a log
-	logging.Print("List publications, total " + strconv.Itoa(len(contents)))
+	logging.InfoContext(r.Context(), "publications listed", "total", len(contents))
 
 	w.Header().Set("Content-Type", api.ContentType_JSON)
 	enc := json.NewEncoder(w)
@@ -227,7 +226,7 @@ func GetContentInfoFromLicense(w http.ResponseWriter, r *http.Request, s Server)
 	licenseID := vars["license_id"]
 
 	// add a log
-	logging.Print("Get content info from licenceId " + licenseID)
+	logging.InfoContext(r.Context(), "content info fetched by license", "license_id", licenseID)
 
 	// get the info
 	content, err := s.Index().GetFromLicense(licenseID)
@@ -259,7 +258,7 @@ func GetContentInfo(w http.ResponseWriter, r *http.Request, s Server) {
 	contentID := vars["content_id"]
 
 	// add a log
-	logging.Print("Get content info " + contentID)
+	logging.InfoContext(r.Context(), "content info fetched", "content_id", contentID)
 
 	// get the info
 	content, err := s.Index().Get(contentID)
@@ -294,7 +293,7 @@ func GetContentFile(w http.ResponseWriter, r *http.Request, s Server) {
 	contentID := vars["content_id"]
 
 	// add a log
-	logging.Print("Fetch content " + contentID)
+	logging.InfoContext(r.Context(), "content fetched", "content_id", contentID)
 
 	content, err := s.Index().Get(contentID)
 	if err != nil { //item probably not found
@@ -357,7 +356,7 @@ func DeleteContent(w http.ResponseWriter, r *http.Request, s Server) {
 	contentID := vars["content_id"]
 
 	// add a log
-	logging.Print("Delete publication " + contentID)
+	logging.WarnContext(r.Context(), "publication deleted", "content_id", contentID)
 
 	err := s.Index().Delete(contentID)
 	if err != nil { //item probably not found
