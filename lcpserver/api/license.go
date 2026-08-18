@@ -285,7 +285,7 @@ func GetTestLicense(w http.ResponseWriter, r *http.Request, s Server) {
 	licenseID := vars["license_id"]
 
 	// add a log
-	logging.Print("Get a Test License " + licenseID)
+	logging.InfoContext(r.Context(), "test license fetched", "license_id", licenseID)
 
 	// initialize the license from the info stored in the db.
 	var licOut license.License
@@ -340,7 +340,7 @@ func GetLicense(w http.ResponseWriter, r *http.Request, s Server) {
 	licenseID := vars["license_id"]
 
 	// add a log
-	logging.Print("Get the License " + licenseID)
+	logging.InfoContext(r.Context(), "license fetched", "license_id", licenseID)
 
 	// initialize the license from the info stored in the db.
 	var licOut license.License
@@ -442,7 +442,7 @@ func GenerateLicense(w http.ResponseWriter, r *http.Request, s Server) {
 	license.Initialize(contentID, &lic)
 
 	// add a log
-	logging.Print("Generate the License " + lic.ID + " for Content " + contentID + " and User " + lic.User.ID)
+	logging.InfoContext(r.Context(), "license generated", "license_id", lic.ID, "content_id", contentID, logging.UserID(lic.User.ID))
 
 	// normalize the start and end date, UTC, no milliseconds
 	setRights(&lic)
@@ -490,7 +490,7 @@ func GetProtectedPublication(w http.ResponseWriter, r *http.Request, s Server) {
 	licenseID := vars["license_id"]
 
 	// add a log
-	logging.Print("Get a protected publication for License " + licenseID)
+	logging.InfoContext(r.Context(), "protected publication fetched", "license_id", licenseID)
 
 	// get the input body
 	var licIn license.License
@@ -559,7 +559,7 @@ func GenerateProtectedPublication(w http.ResponseWriter, r *http.Request, s Serv
 	vars := mux.Vars(r)
 	contentID := vars["content_id"]
 
-	logging.Print("Generate a protected publication for content " + contentID)
+	logging.InfoContext(r.Context(), "protected publication generated", "content_id", contentID)
 
 	// get the input body
 	var lic license.License
@@ -640,7 +640,7 @@ func UpdateLicense(w http.ResponseWriter, r *http.Request, s Server) {
 	licenseID := vars["license_id"]
 
 	// add a log
-	logging.Print("Update the License " + licenseID)
+	logging.InfoContext(r.Context(), "license updated", "license_id", licenseID)
 
 	var licIn license.License
 	err := DecodeJSONLicense(r, &licIn)
@@ -734,7 +734,7 @@ func ListLicenses(w http.ResponseWriter, r *http.Request, s Server) {
 	licenses := make([]license.LicenseReport, 0)
 
 	// add a log
-	logging.Print("List Licenses (page " + strconv.Itoa(int(page)) + ", count " + strconv.Itoa(int(perPage)) + ")")
+	logging.InfoContext(r.Context(), "licenses listed", "page", page, "per_page", perPage)
 
 	fn := s.Licenses().ListAll(int(perPage), int(page))
 	for it, err := fn(); err == nil; it, err = fn() {
@@ -809,7 +809,7 @@ func ListLicensesForContent(w http.ResponseWriter, r *http.Request, s Server) {
 	licenses := make([]license.LicenseReport, 0)
 
 	// add a log
-	logging.Print("List Licenses for publication " + contentID + " (page " + strconv.Itoa(int(page)) + ", count " + strconv.Itoa(int(perPage)) + ")")
+	logging.InfoContext(r.Context(), "licenses listed for publication", "content_id", contentID, "page", page, "per_page", perPage)
 
 	fn := s.Licenses().ListByContentID(contentID, int(perPage), int(page))
 	for it, err := fn(); err == nil; it, err = fn() {
@@ -942,19 +942,19 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 		return
 	}
 
-	logging.Print(fmt.Sprintf("Batch license request decode took %dms", time.Since(startTotal).Milliseconds()))
+	logging.DebugContext(r.Context(), "batch decode complete", "elapsed_ms", time.Since(startTotal).Milliseconds())
 
 	if len(req.LicenseIDs) == 0 {
 		problem.Error(w, r, problem.Problem{Detail: "license_ids array is required"}, http.StatusBadRequest)
 		return
 	}
 
-	logging.Print(fmt.Sprintf("Batch license request started for %d licenses", len(req.LicenseIDs)))
+	logging.DebugContext(r.Context(), "batch license request started", "count", len(req.LicenseIDs))
 
 	// Validate and process encryption input (converts HexValue to Value)
 	startCheckInput := time.Now()
 	err = checkGetLicenseInput(&req.Encryption)
-	logging.Print(fmt.Sprintf("checkGetLicenseInput took %dms", time.Since(startCheckInput).Milliseconds()))
+	logging.DebugContext(r.Context(), "batch input validated", "elapsed_ms", time.Since(startCheckInput).Milliseconds())
 	if err != nil {
 		problem.Error(w, r, problem.Problem{Detail: "Invalid encryption info: " + err.Error()}, http.StatusBadRequest)
 		return
@@ -964,11 +964,11 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 	startDb := time.Now()
 	licensesMap, err := s.Licenses().GetByIDs(req.LicenseIDs)
 	if err != nil {
-		logging.Print(fmt.Sprintf("Batch license DB query failed after %dms: %s", time.Since(startDb).Milliseconds(), err.Error()))
+		logging.ErrorContext(r.Context(), "batch license query failed", "elapsed_ms", time.Since(startDb).Milliseconds(), "err", err)
 		problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
 		return
 	}
-	logging.Print(fmt.Sprintf("Batch license DB query completed in %dms, found %d licenses", time.Since(startDb).Milliseconds(), len(licensesMap)))
+	logging.DebugContext(r.Context(), "batch license query complete", "elapsed_ms", time.Since(startDb).Milliseconds(), "found", len(licensesMap))
 
 	// Check if encryption info was provided (for building full licenses)
 	hasEncryption := req.Encryption.Encryption.UserKey.Hint != "" ||
@@ -987,17 +987,17 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 				seenContentIDs[lic.ContentID] = true
 			}
 		}
-		logging.Print(fmt.Sprintf("Parsing content IDs took %dms", time.Since(startContentIDParsing).Milliseconds()))
+		logging.DebugContext(r.Context(), "batch content ids parsed", "elapsed_ms", time.Since(startContentIDParsing).Milliseconds())
 
 		var err error
 		startContent := time.Now()
 		contentMap, err = s.Index().GetByIDs(contentIDs)
 		if err != nil {
-			logging.Print(fmt.Sprintf("Batch content DB query failed after %dms: %s", time.Since(startContent).Milliseconds(), err.Error()))
+			logging.ErrorContext(r.Context(), "batch content query failed", "elapsed_ms", time.Since(startContent).Milliseconds(), "err", err)
 			problem.Error(w, r, problem.Problem{Detail: err.Error()}, http.StatusInternalServerError)
 			return
 		}
-		logging.Print(fmt.Sprintf("Batch content DB query completed in %dms, found %d contents", time.Since(startContent).Milliseconds(), len(contentMap)))
+		logging.DebugContext(r.Context(), "batch content query complete", "elapsed_ms", time.Since(startContent).Milliseconds(), "found", len(contentMap))
 	}
 
 	// Build the response
@@ -1021,8 +1021,7 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 			}
 			response.Licenses[idx] = result
 		}
-		logging.Print(fmt.Sprintf("Batch license build (fast-path) completed in %dms, processed %d licenses, %d errors",
-			time.Since(startBuild).Milliseconds(), buildCount, errorCount))
+		logging.DebugContext(r.Context(), "batch build complete", "path", "fast", "elapsed_ms", time.Since(startBuild).Milliseconds(), "built", buildCount, "errors", errorCount)
 
 	} else {
 		// Heavy path: Parallel processing for encryption and signing
@@ -1037,7 +1036,7 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 			numWorkers = len(req.LicenseIDs)
 		}
 
-		logging.Print(fmt.Sprintf("Batch license build starting with %d workers", numWorkers))
+		logging.DebugContext(r.Context(), "batch build started", "path", "parallel", "workers", numWorkers)
 
 		jobs := make(chan int, len(req.LicenseIDs))
 		results := make(chan buildResult, len(req.LicenseIDs))
@@ -1098,8 +1097,7 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 			}
 		}
 
-		logging.Print(fmt.Sprintf("Batch license build completed in %dms, built %d licenses, %d errors (parallel, %d workers)",
-			time.Since(startBuild).Milliseconds(), buildCount, errorCount, numWorkers))
+		logging.DebugContext(r.Context(), "batch build complete", "path", "parallel", "elapsed_ms", time.Since(startBuild).Milliseconds(), "built", buildCount, "errors", errorCount, "workers", numWorkers)
 	}
 
 	// Set headers and send response
@@ -1111,8 +1109,7 @@ func GetLicensesBatch(w http.ResponseWriter, r *http.Request, s Server) {
 	enc.SetEscapeHTML(false)
 	enc.Encode(response)
 
-	logging.Print(fmt.Sprintf("Batch license request completed in %dms total for %d licenses (encode: %dms)",
-		time.Since(startTotal).Milliseconds(), len(req.LicenseIDs), time.Since(startEncode).Milliseconds()))
+	logging.InfoContext(r.Context(), "batch license request complete", "elapsed_ms", time.Since(startTotal).Milliseconds(), "count", len(req.LicenseIDs), "encode_ms", time.Since(startEncode).Milliseconds())
 }
 
 // notifyLsdServer informs the License Status Server of the creation of a new license
