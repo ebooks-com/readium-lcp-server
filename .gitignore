@@ -4,7 +4,6 @@ lcpencrypt/lcpencrypt
 files/
 *.sqlite*
 lcpserver/manage/config.js
-.vscode/launch.json
 debug
 *.a
 *.lib
@@ -22,7 +21,11 @@ license/user_key_prod.go
 *.htpasswd
 lcpserver/test.sqllite
 .DS_Store
-.vscode
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+bin/
+.env
 lcpencrypt/.DS_Store
 lcpserver/.DS_Store
 npm-debug.log

@@ -61,7 +61,23 @@ go build -o "$GOPATH/bin" ./lsdserver
 
 On Alpine Linux, add the `musl` build tag, e.g. `go build -tags musl -o "$GOPATH/bin" ./lcpserver`.
 
-On Windows, install a GCC toolchain (e.g. [TDM-GCC](https://jmeubank.github.io/tdm-gcc/)) so the SQLite module compiles, and use `%GOPATH%` with backslashes in paths.
+### Windows and VSCode
+
+Windows needs a UCRT64 GCC toolchain, both for the SQLite module and for the prebuilt MuPDF libraries `lcpencrypt` links against. A MSVCRT-based toolchain such as TDM-GCC compiles but fails to link MuPDF. Install [MSYS2](https://www.msys2.org/) and, once, in its shell:
+
+```sh
+pacman -S mingw-w64-ucrt-x86_64-gcc
+```
+
+Then build with the native Windows Go installation — no MSYS2 shell required:
+
+```sh
+go run ./tools/build
+```
+
+This finds the compiler, enables cgo, and writes `lcpserver`, `lsdserver`, and `lcpencrypt` into `bin/`. Name a target to build just one, e.g. `go run ./tools/build lcpserver`.
+
+In VSCode, Ctrl+Shift+B runs the same build. To debug, copy `.env.example` to `.env`, set the config paths in it, and press F5.
 
 ## Usage
 

@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "lcpserver",
+      "type": "go",
+      "request": "launch",
+      "mode": "exec",
+      "program": "${workspaceFolder}/bin/lcpserver.exe",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "preLaunchTask": "build lcpserver"
+    },
+    {
+      "name": "lsdserver",
+      "type": "go",
+      "request": "launch",
+      "mode": "exec",
+      "program": "${workspaceFolder}/bin/lsdserver.exe",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "preLaunchTask": "build lsdserver"
+    },
+    {
+      "name": "lcpencrypt",
+      "type": "go",
+      "request": "launch",
+      "mode": "exec",
+      "program": "${workspaceFolder}/bin/lcpencrypt.exe",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "preLaunchTask": "build lcpencrypt",
+      "args": []
+    }
+  ]
+}

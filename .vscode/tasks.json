@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build all",
+      "type": "shell",
+      "command": "go run ./tools/build",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$go"],
+      "presentation": { "reveal": "silent", "clear": true }
+    },
+    {
+      "label": "build lcpserver",
+      "type": "shell",
+      "command": "go run ./tools/build lcpserver",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"],
+      "presentation": { "reveal": "silent", "clear": true }
+    },
+    {
+      "label": "build lsdserver",
+      "type": "shell",
+      "command": "go run ./tools/build lsdserver",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"],
+      "presentation": { "reveal": "silent", "clear": true }
+    },
+    {
+      "label": "build lcpencrypt",
+      "type": "shell",
+      "command": "go run ./tools/build lcpencrypt",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"],
+      "presentation": { "reveal": "silent", "clear": true }
+    }
+  ]
+}
