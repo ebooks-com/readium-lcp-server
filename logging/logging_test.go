@@ -25,9 +25,10 @@ func TestPrintStillLogsAtInfo(t *testing.T) {
 }
 
 func TestInitInstallsTheConfiguredLogger(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "init.log")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "lcpserver.log")
 
-	if err := Init(config.Logging{Directory: path, Salt: "s", Level: "info"}); err != nil {
+	if err := Init(config.Logging{Directory: dir, Salt: "s", Level: "info"}, "lcpserver"); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 
@@ -48,8 +49,8 @@ func TestInitRejectsAnUnusableDirectory(t *testing.T) {
 		t.Fatalf("write blocker: %v", err)
 	}
 
-	if err := Init(config.Logging{Directory: filepath.Join(blocker, "init.log")}); err == nil {
+	if err := Init(config.Logging{Directory: blocker}, "lcpserver"); err == nil {
 		Close()
-		t.Fatal("Init accepted a path whose parent is a regular file")
+		t.Fatal("Init accepted a directory that is a regular file")
 	}
 }

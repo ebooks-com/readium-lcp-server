@@ -43,7 +43,7 @@ func main() {
 	config.ReadConfig(configFile)
 	log.Println("Config from " + configFile)
 
-	if err := logging.Init(config.Config.Logging); err != nil {
+	if err := logging.Init(config.Config.Logging, "frontend"); err != nil {
 		panic(err)
 	}
 

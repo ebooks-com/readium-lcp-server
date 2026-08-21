@@ -81,8 +81,9 @@ license_status:
 # Without this section both servers log to stderr at info level. A Windows
 # service discards stderr, so set `directory` there or nothing is readable.
 #logging:
-#    # path of the log file, despite the key name
-#    directory: "<LCP_HOME>/logs/lcp.log"
+#    # each server writes <directory>/<server>.log: lcpserver.log, lsdserver.log,
+#    # frontend.log. One section serves all three, even from a shared file.
+#    directory: "<LCP_HOME>/logs"
 #    # debug | info | warn | error
 #    level: "info"
 #    # rotate once the file passes this size, keep this many, for this long

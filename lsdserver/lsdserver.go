@@ -97,7 +97,7 @@ func main() {
 	goofyMode := config.Config.GoofyMode
 
 	// if the logging key is set, logs will be sent to a file and/or Slack channel for test purposes
-	err = logging.Init(config.Config.Logging)
+	err = logging.Init(config.Config.Logging, "lsdserver")
 	if err != nil {
 		panic(err)
 	}

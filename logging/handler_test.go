@@ -35,11 +35,18 @@ func TestHandlerOmitsRequestIDWhenAbsent(t *testing.T) {
 	}
 }
 
-func TestSetupRedactsThroughTheConfiguredSalt(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.log")
-	if err := setup(config.Logging{Directory: path, Salt: "fixed-salt", Level: "info"}); err != nil {
+func setupInTempDir(t *testing.T, cfg config.Logging) string {
+	t.Helper()
+
+	cfg.Directory = t.TempDir()
+	if err := setup(cfg, "test"); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
+	return filepath.Join(cfg.Directory, "test.log")
+}
+
+func TestSetupRedactsThroughTheConfiguredSalt(t *testing.T) {
+	path := setupInTempDir(t, config.Logging{Salt: "fixed-salt", Level: "info"})
 
 	InfoContext(context.Background(), "license generated",
 		"license_id", "abc-123", UserID("matthew@ebooks.com"))
@@ -61,10 +68,7 @@ func TestSetupRedactsThroughTheConfiguredSalt(t *testing.T) {
 }
 
 func TestSetupFlushesWarnImmediatelyButBuffersInfo(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.log")
-	if err := setup(config.Logging{Directory: path, Salt: "s", Level: "info"}); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+	path := setupInTempDir(t, config.Logging{Salt: "s", Level: "info"})
 	defer Close()
 
 	Info("buffered record")
@@ -83,10 +87,7 @@ func TestSetupFlushesWarnImmediatelyButBuffersInfo(t *testing.T) {
 }
 
 func TestSetupCapturesStdlibLogCalls(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.log")
-	if err := setup(config.Logging{Directory: path, Salt: "s", Level: "info"}); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+	path := setupInTempDir(t, config.Logging{Salt: "s", Level: "info"})
 
 	stdlog.Println("Database driver mssql")
 
@@ -103,8 +104,29 @@ func TestSetupCapturesStdlibLogCalls(t *testing.T) {
 	}
 }
 
+func TestSetupNamesTheLogFileAfterTheServer(t *testing.T) {
+	dir := t.TempDir()
+
+	for _, server := range []string{"lcpserver", "lsdserver"} {
+		if err := setup(config.Logging{Directory: dir, Salt: "s", Level: "info"}, server); err != nil {
+			t.Fatalf("setup %s: %v", server, err)
+		}
+		Warn("record from " + server)
+		if err := Close(); err != nil {
+			t.Fatalf("close %s: %v", server, err)
+		}
+	}
+
+	for _, server := range []string{"lcpserver", "lsdserver"} {
+		body := readFileOrEmpty(t, filepath.Join(dir, server+".log"))
+		if !strings.Contains(body, "record from "+server) {
+			t.Errorf("%s.log holds %q, want only its own server's record", server, body)
+		}
+	}
+}
+
 func TestSetupWithoutADirectoryLeavesNoFile(t *testing.T) {
-	if err := setup(config.Logging{Salt: "s"}); err != nil {
+	if err := setup(config.Logging{Salt: "s"}, "test"); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 	defer Close()
@@ -115,14 +137,12 @@ func TestSetupWithoutADirectoryLeavesNoFile(t *testing.T) {
 }
 
 func TestSetupClosesTheWriterItReplaces(t *testing.T) {
-	first := filepath.Join(t.TempDir(), "first.log")
-	if err := setup(config.Logging{Directory: first, Salt: "s"}); err != nil {
+	if err := setup(config.Logging{Directory: t.TempDir(), Salt: "s"}, "first"); err != nil {
 		t.Fatalf("first setup: %v", err)
 	}
 	replaced := activeFile.Load()
 
-	second := filepath.Join(t.TempDir(), "second.log")
-	if err := setup(config.Logging{Directory: second, Salt: "s"}); err != nil {
+	if err := setup(config.Logging{Directory: t.TempDir(), Salt: "s"}, "second"); err != nil {
 		t.Fatalf("second setup: %v", err)
 	}
 	defer Close()
@@ -133,10 +153,7 @@ func TestSetupClosesTheWriterItReplaces(t *testing.T) {
 }
 
 func TestStdlibLogTargetHasNoSlackSink(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.log")
-	if err := setup(config.Logging{Directory: path, Salt: "s"}); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+	setupInTempDir(t, config.Logging{Salt: "s"})
 	defer Close()
 
 	h, ok := stdlogTarget.Load().Handler().(*forkHandler)
@@ -154,18 +171,15 @@ func TestSetupRejectsAnUnusableDirectory(t *testing.T) {
 		t.Fatalf("write blocker: %v", err)
 	}
 
-	err := setup(config.Logging{Directory: filepath.Join(blocker, "test.log"), Salt: "s"})
+	err := setup(config.Logging{Directory: blocker, Salt: "s"}, "test")
 	if err == nil {
 		Close()
-		t.Fatal("setup accepted a path whose parent is a regular file")
+		t.Fatal("setup accepted a directory that is a regular file")
 	}
 }
 
 func TestSetupWarnsOnAnUnrecognisedLevel(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.log")
-	if err := setup(config.Logging{Directory: path, Salt: "s", Level: "wran"}); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+	path := setupInTempDir(t, config.Logging{Salt: "s", Level: "wran"})
 
 	if err := Close(); err != nil {
 		t.Fatalf("close: %v", err)
@@ -179,10 +193,7 @@ func TestSetupWarnsOnAnUnrecognisedLevel(t *testing.T) {
 func TestSetupWritesToStderrAsWellAsTheFile(t *testing.T) {
 	captured := captureStderr(t)
 
-	path := filepath.Join(t.TempDir(), "test.log")
-	if err := setup(config.Logging{Directory: path, Salt: "s", Level: "info"}); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+	path := setupInTempDir(t, config.Logging{Salt: "s", Level: "info"})
 
 	Warn("both sinks")
 

@@ -29,10 +29,10 @@ type bufferedFile struct {
 	closed   bool
 }
 
-// newBufferedFile returns nil when no directory is configured, in which case
-// the caller writes to stderr instead.
-func newBufferedFile(cfg config.Logging) *bufferedFile {
-	if cfg.Directory == "" {
+// newBufferedFile returns nil when path is empty, in which case the caller
+// writes to stderr instead.
+func newBufferedFile(cfg config.Logging, path string) *bufferedFile {
+	if path == "" {
 		return nil
 	}
 
@@ -42,7 +42,7 @@ func newBufferedFile(cfg config.Logging) *bufferedFile {
 	}
 
 	return newBufferedSink(&lumberjack.Logger{
-		Filename:   cfg.Directory,
+		Filename:   path,
 		MaxSize:    cfg.MaxSizeMB,
 		MaxBackups: cfg.MaxBackups,
 		MaxAge:     cfg.MaxAgeDays,

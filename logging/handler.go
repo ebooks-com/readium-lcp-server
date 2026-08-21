@@ -68,16 +68,19 @@ func (stdlogWriter) Write(p []byte) (int, error) {
 }
 
 // setup builds the logger from configuration and installs it process-wide.
-func setup(cfg config.Logging) error {
+// serverName names the log file, so servers sharing a configuration file each
+// rotate their own.
+func setup(cfg config.Logging, serverName string) error {
 	applyDefaults(&cfg)
 
-	if cfg.Directory != "" {
-		if err := probeLogPath(cfg.Directory); err != nil {
+	path := logFilePath(cfg.Directory, serverName)
+	if path != "" {
+		if err := probeLogPath(path); err != nil {
 			return err
 		}
 	}
 
-	file := newBufferedFile(cfg)
+	file := newBufferedFile(cfg, path)
 
 	var out io.Writer = os.Stderr
 	if file != nil {
@@ -127,6 +130,15 @@ func setup(cfg config.Logging) error {
 
 // probeLogPath reports whether the configured file can be created and appended
 // to, so a bad path fails at start-up rather than on the first record.
+// logFilePath returns the empty string when no directory is configured, which
+// leaves the logger writing to stderr alone.
+func logFilePath(directory, serverName string) string {
+	if directory == "" {
+		return ""
+	}
+	return filepath.Join(directory, serverName+".log")
+}
+
 func probeLogPath(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

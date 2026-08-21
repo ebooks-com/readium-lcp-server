@@ -10,9 +10,10 @@ import (
 )
 
 // Init installs the process-wide logger described by the logging section of the
-// configuration.
-func Init(logging config.Logging) error {
-	return setup(logging)
+// configuration. serverName names this server's log file within the configured
+// directory.
+func Init(logging config.Logging, serverName string) error {
+	return setup(logging, serverName)
 }
 
 // Print logs message at INFO.

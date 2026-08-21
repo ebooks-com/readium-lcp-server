@@ -14,7 +14,7 @@ import (
 
 func TestBufferedFileHoldsWritesUntilFlush(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.log")
-	w := newBufferedFile(config.Logging{Directory: path, MaxSizeMB: 1, MaxBackups: 2, MaxAgeDays: 1})
+	w := newBufferedFile(config.Logging{MaxSizeMB: 1, MaxBackups: 2, MaxAgeDays: 1}, path)
 	defer w.Close()
 
 	if _, err := w.Write([]byte("buffered line\n")); err != nil {
@@ -36,7 +36,7 @@ func TestBufferedFileHoldsWritesUntilFlush(t *testing.T) {
 
 func TestBufferedFileFlushesOnClose(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.log")
-	w := newBufferedFile(config.Logging{Directory: path, MaxSizeMB: 1, MaxBackups: 2, MaxAgeDays: 1})
+	w := newBufferedFile(config.Logging{MaxSizeMB: 1, MaxBackups: 2, MaxAgeDays: 1}, path)
 
 	if _, err := w.Write([]byte("closing line\n")); err != nil {
 		t.Fatalf("write: %v", err)
@@ -53,7 +53,7 @@ func TestBufferedFileFlushesOnClose(t *testing.T) {
 func TestBufferedFileRotatesPastMaxSize(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.log")
-	w := newBufferedFile(config.Logging{Directory: path, MaxSizeMB: 1, MaxBackups: 3, MaxAgeDays: 1})
+	w := newBufferedFile(config.Logging{MaxSizeMB: 1, MaxBackups: 3, MaxAgeDays: 1}, path)
 	defer w.Close()
 
 	line := strings.Repeat("x", 1024) + "\n"
@@ -75,9 +75,9 @@ func TestBufferedFileRotatesPastMaxSize(t *testing.T) {
 	}
 }
 
-func TestBufferedFileIsNilWithoutADirectory(t *testing.T) {
-	if w := newBufferedFile(config.Logging{}); w != nil {
-		t.Error("newBufferedFile returned a writer when no directory was configured")
+func TestBufferedFileIsNilWithoutAPath(t *testing.T) {
+	if w := newBufferedFile(config.Logging{}, ""); w != nil {
+		t.Error("newBufferedFile returned a writer when no path was given")
 	}
 }
 
