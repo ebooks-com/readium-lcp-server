@@ -19,7 +19,7 @@ import (
 
 const (
 	// DO NOT FORGET to update the version
-	Software_Version = "1.13.2"
+	Software_Version = "1.14.0"
 )
 
 // showHelpAndExit displays some help and exits.
@@ -31,12 +31,15 @@ func showHelpAndExit() {
 	fmt.Println("-provider   publication provider (URI)")
 	fmt.Println("-storage    optional, target location of the encrypted publication, without filename. File system path or s3 bucket")
 	fmt.Println("-url        optional, base url associated with the storage, without filename")
+	fmt.Println("-s3-endpoint           optional, custom S3 endpoint URL for S3-compatible providers (e.g. Cloudflare R2, MinIO)")
+	fmt.Println("-s3-force-path-style   optional, boolean, use path-style S3 URLs; required by some S3-compatible providers")
+	fmt.Println("-s3-disable-ssl        optional, boolean, disable SSL when talking to the S3 endpoint")
 	fmt.Println("-filename   optional, file name for the encrypted publication; if omitted, contentid is used")
 	fmt.Println("-temp       optional, working folder for temporary files. If not set, the current directory will be used.")
 	fmt.Println("-cover      optional, boolean, indicates that a cover should be generated")
 	fmt.Println("-pdfnometa  optional, boolean, indicates that PDF metadata must not be extracted")
 	fmt.Println("-contentid  optional, publication identifier; if omitted a uuid is generated")
-	fmt.Println("-contentkey optional, base64 encoded content key; if omitted a random content key is generated")
+	fmt.Println("-contentkey optional, base64 encoded content key; if omitted a random content key is generated, or the content key is retrieved from the License Server")
 	fmt.Println("-lcpsv      optional, URL, host name of the License Server to be notified; syntax http://username:password@example.com")
 	fmt.Println("-v2         optional, boolean, indicates communication with a License Server v2")
 	// these parameters are deprecated, let's be silent about them in the help
@@ -68,13 +71,16 @@ func main() {
 	pdfnometa := flag.Bool("pdfnometa", false, "boolean, indicates that PDF metadata must not be extracted")
 	useFilenameAs := flag.String("usefnas", "", "if set to 'uuid', the file name is used as publication uuid")
 	contentid := flag.String("contentid", "", "imposed publication UUID, used to update an existing publication")
-	contentkeyFlag := flag.String("contentkey", "", "base64 encoded content key; if omitted a random content key is generated")
+	contentkey := flag.String("contentkey", "", "optional, base64 encoded content key; if omitted a random content key is generated")
 	lcpsv := flag.String("lcpsv", "", "URL, host name of the License server which is notified; the preferred syntax is http://username:password@example.com")
 	v2 := flag.Bool("v2", false, "boolean, indicates a v2 License server")
 	username := flag.String("login", "", "optional unless lcpsv is used, username for the License server")
 	password := flag.String("password", "", "optional unless lcpsv is used, password for the License server")
 	notify := flag.String("notify", "", "URL, notification endpoint for a CMS; its syntax is http://username:password@example.com")
 	verbose := flag.Bool("verbose", false, "boolean, the information sent to the LCP Server and CMS will be displayed")
+	s3Endpoint := flag.String("s3-endpoint", "", "optional, custom S3 endpoint for S3-compatible storage providers (e.g. Cloudflare R2, MinIO, Backblaze B2)")
+	s3ForcePathStyle := flag.Bool("s3-force-path-style", false, "optional, use path-style S3 URLs (bucket in path instead of subdomain); often required by S3-compatible providers")
+	s3DisableSSL := flag.Bool("s3-disable-ssl", false, "optional, disable SSL when talking to the S3 endpoint; intended for local/dev S3-compatible servers")
 
 	help := flag.Bool("help", false, "shows information")
 
@@ -106,28 +112,32 @@ func main() {
 	// get the file name from the input path, strip the extension
 	filen := strings.TrimSuffix(filepath.Base(*inputPath), filepath.Ext(*inputPath))
 
-	// if the publication UUID is imposed, check if the content already exists in the License Server.
-	// Note that the publication UUID may also have be set via the command line. 
-	// If this is the case, get the content encryption key for the server, so that the new encryption
-	// keeps the same key.
-	// This is necessary to allow fresh licenses being capable of decrypting previously downloaded content.
+	// if the file name is the publication UUID, set the contentid to the file name
 	if *useFilenameAs == "uuid" {
-		*contentid = filen
+		*contentid = filen // Note that contentid may also be set via the command line
 	}
 
-	contentkey := *contentkeyFlag
-	if *contentid != "" && contentkey == "" {
+	// if the publication UUID is imposed but not the content key, check if the content already exists in the License Server.
+	// If this is the case, get the content encryption key from the server,
+	// so that the new encryption process keeps the same key.
+	// This is necessary to allow fresh licenses decrypting previously downloaded content.
+	if *contentid != "" && *contentkey == "" {
 		// warning: this is a synchronous REST call
 		// contentKey is not initialized if the content does not exist in the License Server
 		var err error
-		contentkey, err = getContentKey(*contentid, *lcpsv, *v2, *username, *password)
+		*contentkey, err = getContentKey(*contentid, *lcpsv, *v2, *username, *password)
 		if err != nil {
 			exitWithError("Error retrieving content info", err)
 		}
 	}
 
 	// encrypt the publication
-	publication, err := encrypt.ProcessEncryption(*contentid, contentkey, *inputPath, *tempRepo, *outputRepo, *storageRepo, *storageURL, *storageFilename, *cover, *pdfnometa)
+	s3opts := encrypt.S3Options{
+		Endpoint:       *s3Endpoint,
+		ForcePathStyle: *s3ForcePathStyle,
+		DisableSSL:     *s3DisableSSL,
+	}
+	publication, err := encrypt.ProcessEncryption(*contentid, *contentkey, *inputPath, *tempRepo, *outputRepo, *storageRepo, *storageURL, *storageFilename, *cover, *pdfnometa, s3opts)
 	if err != nil {
 		exitWithError("Error processing a publication", err)
 	}
@@ -149,7 +159,7 @@ func main() {
 	elapsed := time.Since(start)
 
 	// notify the license server
-	err = encrypt.NotifyLCPServer(*publication, contentkey != "", *providerUri, *lcpsv, *v2, *username, *password, *verbose)
+	err = encrypt.NotifyLCPServer(*publication, *contentkey != "", *providerUri, *lcpsv, *v2, *username, *password, *verbose)
 	if err != nil {
 		exitWithError("Error notifying the LCP Server", err)
 	}
