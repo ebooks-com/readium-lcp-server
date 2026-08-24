@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/readium/readium-lcp-server/logging"
 )
 
 type ContentInfo struct {
@@ -93,7 +95,7 @@ func getContentKey(contentID, lcpsv string, v2 bool, username, password string) 
 			}
 			contentKey = b64.StdEncoding.EncodeToString(contentInfo.EncryptionKey)
 		}
-		fmt.Println("Existing encryption key retrieved")
+		logging.Info("Existing encryption key retrieved", "content_id", contentID)
 	} else if resp.StatusCode != http.StatusNotFound {
 		return contentKey, fmt.Errorf("the server returned an error %d", resp.StatusCode)
 	}

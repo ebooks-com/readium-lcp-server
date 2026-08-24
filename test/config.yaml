@@ -76,13 +76,17 @@ license_status:
     #renew_days: 7
 
 
-# Logging (optional, used by the License Server, the Status Server and the Frontend server)
+# Logging (optional, used by the License Server, the Status Server, the Frontend
+# server and lcpencrypt)
 #
-# Without this section both servers log to stderr at info level. A Windows
-# service discards stderr, so set `directory` there or nothing is readable.
+# Without this section they log to stderr at info level. A Windows service
+# discards stderr, so set `directory` there or nothing is readable.
+#
+# lcpencrypt finds this file through READIUM_LCPENCRYPT_CONFIG, or as
+# config.yaml in its working directory, and reads no other section.
 #logging:
 #    # each server writes <directory>/<server>.log: lcpserver.log, lsdserver.log,
-#    # frontend.log. One section serves all three, even from a shared file.
+#    # frontend.log, lcpencrypt.log. One section serves them all.
 #    directory: "<LCP_HOME>/logs"
 #    # debug | info | warn | error
 #    level: "info"

@@ -8,13 +8,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/readium/readium-lcp-server/encrypt"
+	"github.com/readium/readium-lcp-server/logging"
 )
 
 const (
@@ -55,7 +55,8 @@ func showHelpAndExit() {
 // exitWithError outputs an error message and exits.
 func exitWithError(context string, err error) {
 
-	fmt.Println(context, ":", err.Error())
+	logging.Error(context, "err", err)
+	logging.Close()
 	os.Exit(1)
 }
 
@@ -92,10 +93,12 @@ func main() {
 		showHelpAndExit()
 	}
 
-	// log if verbose mode
-	if *verbose {
-		log.Println("Software Version " + Software_Version)
+	if err := initLogging(*verbose); err != nil {
+		fmt.Println("Logging :", err.Error())
+		os.Exit(1)
 	}
+
+	logging.Debug("lcpencrypt starting", "version", Software_Version)
 
 	if *storageRepo != "" && *storageURL == "" {
 		exitWithError("Parameters", errors.New("incorrect parameters, storage requires url, for more information type 'lcpencrypt -help' "))
@@ -147,13 +150,9 @@ func main() {
 		publication.AltID = filen
 	}
 
-	// log if verbose mode
-	if *verbose {
-		log.Println("Encrypted file:", filepath.Join(publication.OutputRepo, publication.FileName))
-		if publication.ExtractCover {
-			log.Println("Cover file name:", publication.CoverName)
-			log.Println("Cover file url:", publication.CoverUrl)
-		}
+	logging.Debug("Publication encrypted", "path", filepath.Join(publication.OutputRepo, publication.FileName))
+	if publication.ExtractCover {
+		logging.Debug("Cover extracted", "name", publication.CoverName, "url", publication.CoverUrl)
 	}
 
 	elapsed := time.Since(start)
@@ -167,7 +166,7 @@ func main() {
 	// notify a CMS (username and password are always in the URL)
 	err = encrypt.NotifyCMS(*publication, *notify, *verbose)
 	if err != nil {
-		fmt.Println("Error notifying the CMS:", err.Error())
+		logging.Error("Error notifying the CMS", "err", err)
 		// abort the notification of the license server
 		err = encrypt.AbortNotification(*publication, *lcpsv, *v2, *username, *password)
 		if err != nil {
@@ -175,6 +174,7 @@ func main() {
 		}
 	}
 
-	log.Println("The encryption took", elapsed.Truncate(10 * time.Millisecond))
+	logging.Info("Encryption complete", "content_id", publication.UUID, "elapsed_ms", elapsed.Milliseconds())
+	logging.Close()
 	os.Exit(0)
 }

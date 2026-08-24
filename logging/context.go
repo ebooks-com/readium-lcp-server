@@ -59,6 +59,10 @@ func usableRequestID(id string) bool {
 	return true
 }
 
+// NewCorrelationID returns an identifier for one unit of work, in the form the
+// request id middleware generates.
+func NewCorrelationID() string { return newRequestID() }
+
 func newRequestID() string {
 	var b [4]byte
 	// crypto/rand.Read fills b entirely and never returns an error on go1.24.

@@ -32,10 +32,11 @@ The `source` git remote tracks `readium/readium-lcp-server`. The fork branched a
 
 ### What differs from upstream
 
-The fork's distinctive additions are bulk-fetch endpoints and the SQL Server tuning they rely on, both shaped by eBooks.com's access pattern and deployment and not present in upstream:
+The fork's distinctive additions are bulk-fetch endpoints, the SQL Server tuning they rely on, and structured logging, all shaped by eBooks.com's access pattern and deployment and not present in upstream:
 
 - **Batch endpoints.** `POST /licenses/batch` and `POST /licenses/batch/status` (see [API](#api)) fetch many licenses or statuses in a single request instead of one call each. Fetching licenses and statuses for 80 books drops from ~160 calls to 2. Batch building is parallelized, and the per-row lookup of `content` rows it would otherwise incur is avoided.
 - **SQL Server tuning for batch lookups.** String parameters are sent as `mssql.VarChar` so the server's `varchar` indexes are used, avoiding an implicit per-row `nvarchar`→`varchar` conversion, and batch lookups are chunked to stay within SQL Server's 2100-parameter limit.
+- **Structured logging.** Upstream logs unstructured lines to stderr. This fork logs through `log/slog` with levels, attributes and per-request correlation ids, to a rotating file as well as stderr, redacting secrets and hashing user ids and device names. It is configured by the `logging` section (see [Configuration](#configuration)). `lcpencrypt` takes part: upstream's CLI reads no configuration file, while this fork's reads the `logging` section of one named by `READIUM_LCPENCRYPT_CONFIG`, matching the `READIUM_LCPSERVER_CONFIG` / `READIUM_LSDSERVER_CONFIG` / `READIUM_FRONTEND_CONFIG` convention. Without it the content key and the credentials in `-lcpsv` and `-notify` URLs are printed in full by `-verbose`.
 
 It also carries one fix ahead of upstream: file sizes (`Publication.Size` / `LCPServerMsgV2.Size`) are widened from `uint32` to `int64`, removing truncating casts that corrupted size metadata for publications over 4 GB.
 
@@ -96,6 +97,8 @@ lsdserver &   # Status Server: public, behind an HTTPS reverse proxy
 lcpencrypt -input book.epub -contentid <uuid> -lcpsv http://user:pass@lcp.internal:8989
 ```
 
+It reads the `logging` section of the same configuration file the servers use, through `READIUM_LCPENCRYPT_CONFIG` (see [Configuration](#configuration)). `-verbose` raises the level to debug and logs the notifications sent to the License Server and the CMS, with the content key and the URL credentials redacted.
+
 Both servers require an SQL database and a config file; see [Configuration](#configuration).
 
 ## Configuration
@@ -114,6 +117,19 @@ lcp:
 SQLite, MySQL, and PostgreSQL are also supported; schema-creation scripts for each are in [`dbmodel/`](dbmodel/). SQLite databases are created automatically on first run; the other engines require applying the matching `dbmodel/` script first. `lcpserver` and `lsdserver` must use separate databases.
 
 **Connection pooling.** Both servers configure database connection-pool defaults (max open, max idle, connection lifetimes) to sustain concurrent load. No configuration is required.
+
+**Logging.** The optional `logging` section sets the level, the directory logs are written to, rotation limits, the salt used to hash identifiers, and optional Slack alerting. It is annotated in [`test/config.yaml`](test/config.yaml). Each program writes its own file in `directory` — `lcpserver.log`, `lsdserver.log`, `frontend.log`, `lcpencrypt.log` — so one section serves them all. Set `salt` to a fixed random string shared by all of them, or identifiers hashed by one will not match those hashed by another, or by the same program after a restart. Omit the section and everything logs to stderr at info level; a Windows service discards stderr, so `directory` must be set there for anything to be readable.
+
+Each program finds the file through its own environment variable, falling back to `config.yaml` in the working directory:
+
+| Program | Variable |
+| --- | --- |
+| `lcpserver` | `READIUM_LCPSERVER_CONFIG` |
+| `lsdserver` | `READIUM_LSDSERVER_CONFIG` |
+| frontend server | `READIUM_FRONTEND_CONFIG` |
+| `lcpencrypt` | `READIUM_LCPENCRYPT_CONFIG` |
+
+`READIUM_LCPENCRYPT_CONFIG` has no upstream equivalent. The servers cannot start without a configuration file, but `lcpencrypt` runs from any working directory, so a missing `config.yaml` leaves it logging to stderr rather than failing. A file named by the variable must exist and parse, or the run fails.
 
 ## API
 

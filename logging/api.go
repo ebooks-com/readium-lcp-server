@@ -66,6 +66,17 @@ func ErrorContext(ctx context.Context, msg string, args ...any) {
 	logger.Load().ErrorContext(ctx, msg, args...)
 }
 
+// WithProcessAttrs adds args to every record this process logs from now on.
+// A server distinguishes its concurrent work by the request id the handler
+// attaches, while a one-shot tool has one unit of work per process and can
+// name it once.
+//
+// Call it after Init, which replaces the logger, and before the work starts.
+func WithProcessAttrs(args ...any) {
+	logger.Store(logger.Load().With(args...))
+	stdlogTarget.Store(stdlogTarget.Load().With(args...))
+}
+
 // Close flushes buffered records and stops the Slack worker. Call it before the
 // process exits.
 func Close() error {

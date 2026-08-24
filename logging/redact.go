@@ -6,23 +6,35 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 )
+
+// activeSalt is the key RedactJSON hashes with, since it runs outside the
+// handler that closes over the salt. setup replaces it.
+var activeSalt atomic.Pointer[[]byte]
+
+func init() {
+	salt := randomSalt()
+	activeSalt.Store(&salt)
+}
 
 const redactedValue = "[REDACTED]"
 
 // redactedKeys are attribute keys whose values never reach a sink, in the
 // normalised form produced by normaliseKey.
 var redactedKeys = map[string]struct{}{
-	"passphrase":       {},
-	"hashedpassphrase": {},
-	"hint":             {},
-	"contentkey":       {},
-	"userkey":          {},
-	"token":            {},
-	"secret":           {},
-	"password":         {},
-	"dsn":              {},
-	"privatekey":       {},
+	"passphrase":           {},
+	"hashedpassphrase":     {},
+	"hint":                 {},
+	"contentkey":           {},
+	"contentencryptionkey": {},
+	"encryptionkey":        {},
+	"userkey":              {},
+	"token":                {},
+	"secret":               {},
+	"password":             {},
+	"dsn":                  {},
+	"privatekey":           {},
 }
 
 // hashedKeys are attribute keys carrying personal data, mapped to the prefix
@@ -32,10 +44,21 @@ var hashedKeys = map[string]string{
 	"devicename": "d:",
 }
 
-// normaliseKey lowercases a key and strips underscores so that user_id, userId
-// and UserID all resolve to one entry.
+// normaliseKey lowercases a key and strips underscores and hyphens so that
+// user_id, userId, UserID and user-id all resolve to one entry.
 func normaliseKey(key string) string {
-	return strings.ToLower(strings.ReplaceAll(key, "_", ""))
+	return strings.ToLower(keySeparators.Replace(key))
+}
+
+var keySeparators = strings.NewReplacer("_", "", "-", "")
+
+// hashValue returns a keyed hash of value, truncated to 48 bits. Collisions
+// stay negligible at the distinct-user counts a single log file holds, and a
+// collision would merge two customers' events.
+func hashValue(salt []byte, value string) string {
+	mac := hmac.New(sha256.New, salt)
+	mac.Write([]byte(value))
+	return hex.EncodeToString(mac.Sum(nil))[:12]
 }
 
 // newRedactor returns a slog ReplaceAttr function that blanks secret values and
@@ -54,11 +77,7 @@ func newRedactor(salt []byte) func([]string, slog.Attr) slog.Attr {
 		}
 
 		if prefix, found := hashedKeys[key]; found {
-			mac := hmac.New(sha256.New, salt)
-			mac.Write([]byte(a.Value.String()))
-			// 48 bits keeps collisions negligible at the distinct-user counts a
-			// single log file holds; a collision would merge two customers' events.
-			return slog.String(a.Key, prefix+hex.EncodeToString(mac.Sum(nil))[:12])
+			return slog.String(a.Key, prefix+hashValue(salt, a.Value.String()))
 		}
 
 		return a

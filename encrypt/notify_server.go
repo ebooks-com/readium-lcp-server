@@ -8,14 +8,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
 	apilcp "github.com/readium/readium-lcp-server/lcpserver/api"
+	"github.com/readium/readium-lcp-server/logging"
 )
 
 // LCPServerMsgV2 is used for notifying an LCP Server V2
@@ -160,11 +159,7 @@ func NotifyLCPServer(pub Publication, update bool, prov, lcpsv string, v2 bool, 
 
 	// verbose: log the notification
 	if verbose {
-		fmt.Println("LCP Server Notification:")
-		var out bytes.Buffer
-		json.Indent(&out, jsonBody, "", " ")
-		out.WriteTo(os.Stdout)
-		fmt.Println("")
+		logging.Info("LCP Server notification", "body", logging.RedactJSON(jsonBody))
 	}
 
 	req.SetBasicAuth(username, password)
@@ -180,7 +175,7 @@ func NotifyLCPServer(pub Publication, update bool, prov, lcpsv string, v2 bool, 
 	if (resp.StatusCode != 302) && (resp.StatusCode/100) != 2 { //302=found or 20x reply = OK
 		return fmt.Errorf("the server returned an error %d", resp.StatusCode)
 	}
-	log.Println("The LCP Server was notified")
+	logging.Info("The LCP Server was notified", "content_id", pub.UUID)
 	return nil
 }
 
@@ -230,7 +225,7 @@ func AbortNotification(pub Publication, lcpsv string, v2 bool, username string, 
 	if (resp.StatusCode != 302) && (resp.StatusCode/100) != 2 { //302=found or 20x reply = OK
 		return fmt.Errorf("the server returned an error %d", resp.StatusCode)
 	}
-	log.Println("Encrypted publication deleted from the LCP Server")
+	logging.Info("Encrypted publication deleted from the LCP Server", "content_id", pub.UUID)
 	return nil
 }
 
@@ -293,11 +288,7 @@ func NotifyCMS(pub Publication, notifyURL string, verbose bool) error {
 
 	// verbose: display the notification
 	if verbose {
-		fmt.Println("CMS Notification:")
-		var out bytes.Buffer
-		json.Indent(&out, jsonBody, "", " ")
-		out.WriteTo(os.Stdout)
-		fmt.Println("")
+		logging.Info("CMS notification", "body", logging.RedactJSON(jsonBody))
 	}
 
 	req.SetBasicAuth(username, password)
@@ -313,7 +304,7 @@ func NotifyCMS(pub Publication, notifyURL string, verbose bool) error {
 	if (resp.StatusCode != 302) && (resp.StatusCode/100) != 2 { //302=found or 20x reply = OK
 		return fmt.Errorf("the server returned an error %d", resp.StatusCode)
 	}
-	log.Println("The CMS was notified")
+	logging.Info("The CMS was notified", "content_id", pub.UUID)
 	return nil
 }
 

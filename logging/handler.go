@@ -87,12 +87,15 @@ func setup(cfg config.Logging, serverName string) error {
 		out = io.MultiWriter(os.Stderr, file)
 	}
 
+	salt := resolveSalt(cfg.Salt)
+	activeSalt.Store(&salt)
+
 	level, levelRecognised := parseLevel(cfg.Level)
 	slackLevel, slackLevelRecognised := parseLevel(cfg.SlackLevel)
 
 	inner := slog.NewTextHandler(out, &slog.HandlerOptions{
 		Level:       level,
-		ReplaceAttr: newRedactor(resolveSalt(cfg.Salt)),
+		ReplaceAttr: newRedactor(salt),
 	})
 
 	var sink *slackSink
@@ -121,7 +124,9 @@ func setup(cfg config.Logging, serverName string) error {
 	if !slackLevelRecognised {
 		Warn("unrecognised slack level, using info", "configured", cfg.SlackLevel)
 	}
-	if cfg.Salt == "" {
+	// A run with no log file keeps nothing to correlate, and lcpencrypt makes
+	// such a run every time it is invoked outside a configured directory.
+	if cfg.Salt == "" && path != "" {
 		Warn("logging salt is not configured; hashed identifiers will not correlate across restarts or between servers")
 	}
 
@@ -174,6 +179,10 @@ func resolveSalt(configured string) []byte {
 		return []byte(configured)
 	}
 
+	return randomSalt()
+}
+
+func randomSalt() []byte {
 	salt := make([]byte, 32)
 	// crypto/rand.Read fills salt entirely and never returns an error on go1.24.
 	rand.Read(salt)

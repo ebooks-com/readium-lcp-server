@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,6 +19,7 @@ import (
 	"github.com/readium/readium-lcp-server/crypto"
 	"github.com/readium/readium-lcp-server/epub"
 	apilcp "github.com/readium/readium-lcp-server/lcpserver/api"
+	"github.com/readium/readium-lcp-server/logging"
 	"github.com/readium/readium-lcp-server/pack"
 	uuid "github.com/satori/go.uuid"
 )
@@ -56,7 +56,7 @@ func ProcessEncryption(contentID, contentKey, inputPath, tempRepo, outputRepo, s
 	if inputPath == "" {
 		return nil, errors.New("ProcessEncryption, missing input path")
 	}
-	log.Println("Process ", inputPath)
+	logging.Info("Processing a publication", "input", inputPath)
 
 	var pub Publication
 	pub.OutputRepo = outputRepo
@@ -75,7 +75,7 @@ func ProcessEncryption(contentID, contentKey, inputPath, tempRepo, outputRepo, s
 
 	// create a temp folder if declared, or use the current dir
 	if tempRepo != "" {
-		log.Println("Create the temp folder ", tempRepo)
+		logging.Info("Creating the temp folder", "path", tempRepo)
 		err := os.MkdirAll(tempRepo, os.ModePerm)
 		if err != nil && !os.IsExist(err) {
 			return nil, err
@@ -155,7 +155,7 @@ func ProcessEncryption(contentID, contentKey, inputPath, tempRepo, outputRepo, s
 	}
 
 	if deleteTemp {
-		log.Println("Delete the temp file ", inputPath)
+		logging.Info("Deleting the temp file", "path", inputPath)
 		err = os.Remove(inputPath)
 		if err != nil {
 			return nil, err
@@ -204,7 +204,7 @@ func ProcessEncryption(contentID, contentKey, inputPath, tempRepo, outputRepo, s
 		}
 		mode = "s3"
 	}
-	log.Println("Storage mode", mode)
+	logging.Info("Publication stored", "storage_mode", mode, "location", pub.Location)
 
 	// if a cover was extracted, set its url
 	if pub.ExtractCover && pub.CoverName != "" {
@@ -231,7 +231,7 @@ func fetchInputFile(inputPath, tempRepo, contentID string) (string, error) {
 		return "", nil
 	}
 
-	log.Println("Create a temporary file and fetch the input file")
+	logging.Info("Fetching the input file into a temporary file", "input", inputPath)
 
 	// the temp file has the same extension as the remote file
 	inputExt := filepath.Ext(inputPath)
@@ -319,7 +319,7 @@ func checksum(file *os.File) string {
 // processEPUB generates an encrypted EPUB
 func processEPUB(pub *Publication, encrypter crypto.Encrypter, contentKey string) error {
 
-	log.Println("Process as EPUB")
+	logging.Info("Processing as EPUB", "content_id", pub.UUID)
 
 	// create a zip reader from the input path
 	zr, err := zip.OpenReader(pub.InputPath)
@@ -391,7 +391,7 @@ func processEPUB(pub *Publication, encrypter crypto.Encrypter, contentKey string
 			if f.Name == coverPath {
 				epubCover, err := f.Open()
 				if err != nil {
-					log.Printf("Error opening the cover in %s, %s", coverPath, err.Error())
+					logging.Warn("The cover could not be opened", "path", coverPath, "err", err)
 					break // move out of the loop
 				}
 				defer epubCover.Close()
@@ -405,7 +405,7 @@ func processEPUB(pub *Publication, encrypter crypto.Encrypter, contentKey string
 				_, err = io.Copy(coverFile, epubCover)
 				if err != nil {
 					// we do not consider it as a fatal error
-					log.Printf("Error copying cover data, %s", err.Error())
+					logging.Warn("The cover data could not be copied", "err", err)
 				}
 				// we found the cover, exit the loop
 				break
@@ -418,7 +418,7 @@ func processEPUB(pub *Publication, encrypter crypto.Encrypter, contentKey string
 // processPDF wraps a PDF file inside a Readium Package and encrypts its resources
 func processPDF(pub *Publication, encrypter crypto.Encrypter, contentKey string, pdfNoMeta bool) error {
 
-	log.Println("Process as PDF")
+	logging.Info("Processing as PDF", "content_id", pub.UUID)
 
 	tmpPackagePath := filepath.Join(pub.OutputRepo, pub.FileName+".tmp")
 	pub.CoverName = strings.TrimSuffix(pub.FileName, filepath.Ext(pub.FileName)) + ".jpg"
@@ -453,7 +453,7 @@ func processPDF(pub *Publication, encrypter crypto.Encrypter, contentKey string,
 // processRPF encrypts the source Readium Package
 func processRPF(pub *Publication, encrypter crypto.Encrypter, contentKey string) error {
 
-	log.Println("Process as Readium Package")
+	logging.Info("Processing as Readium Package", "content_id", pub.UUID)
 
 	// extract the cover from the package if requested
 	if pub.ExtractCover {
@@ -461,7 +461,7 @@ func processRPF(pub *Publication, encrypter crypto.Encrypter, contentKey string)
 		coverPath, err := pack.ExtractCoverFromRPF(pub.InputPath, pub.OutputRepo)
 		// we do not consider err as a fatal error
 		if err != nil {
-			log.Println("No cover extracted from the RPF. Error:", err.Error())
+			logging.Warn("No cover extracted from the RPF", "content_id", pub.UUID, "err", err)
 		} else {
 			pub.CoverName = filepath.Base(coverPath) // will be "" if no cover was found
 		}
@@ -474,7 +474,7 @@ func processRPF(pub *Publication, encrypter crypto.Encrypter, contentKey string)
 // processLPF transforms a W3C LPF file into a Readium Package and encrypts its resources
 func processLPF(pub *Publication, encrypter crypto.Encrypter, contentKey string) error {
 
-	log.Println("Process as W3C LPF Package")
+	logging.Info("Processing as W3C LPF Package", "content_id", pub.UUID)
 
 	// generate a tmp Readium Package (rwpp) out of a W3C Package (lpf)
 	tmpPackagePath := filepath.Join(pub.OutputRepo, pub.FileName+".tmp")
@@ -501,7 +501,7 @@ func processLPF(pub *Publication, encrypter crypto.Encrypter, contentKey string)
 		coverPath, err := pack.ExtractCoverFromRPF(tmpPackagePath, pub.OutputRepo)
 		// we do not consider err as a fatal error
 		if err != nil {
-			log.Println("No cover extracted from the LPF. Error:", err.Error())
+			logging.Warn("No cover extracted from the LPF", "content_id", pub.UUID, "err", err)
 		} else {
 			pub.CoverName = filepath.Base(coverPath)
 		}
