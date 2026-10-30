@@ -16,6 +16,7 @@ import (
 )
 
 func TestInitLoggingWithoutAConfigFile(t *testing.T) {
+	t.Setenv(configEnvVar, "")
 	t.Chdir(t.TempDir())
 
 	if err := initLogging(false); err != nil {
@@ -24,6 +25,7 @@ func TestInitLoggingWithoutAConfigFile(t *testing.T) {
 }
 
 func TestInitLoggingReadsTheLoggingSection(t *testing.T) {
+	t.Setenv(configEnvVar, "")
 	directory := t.TempDir()
 	writeConfig(t, filepath.Join(directory, defaultConfigFile), "level: \"warn\"\n    salt: \"pepper\"\n")
 	t.Chdir(directory)
@@ -38,6 +40,7 @@ func TestInitLoggingReadsTheLoggingSection(t *testing.T) {
 }
 
 func TestInitLoggingStampsRecordsWithARunID(t *testing.T) {
+	t.Setenv(configEnvVar, "")
 	directory := t.TempDir()
 	writeConfig(t, filepath.Join(directory, defaultConfigFile), "level: \"info\"\n    directory: "+strconv.Quote(directory)+"\n")
 	t.Chdir(directory)
